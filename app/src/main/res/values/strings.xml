@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Dairy App</string>
+    <!-- Web OAuth client ID from Firebase console → Authentication → Google → Web SDK configuration -->
+    <string name="default_web_client_id_bloom" translatable="false">1064986158249-dvr4fq617l67e6gd7u23uls1aeelh52h.apps.googleusercontent.com</string>
+</resources>

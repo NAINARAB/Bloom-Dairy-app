@@ -1,0 +1,41 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Built binaries & dependencies
+*.iml
+.gradle/
+/build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE / Android Studio files
+.idea/
+.kotlin/
+*.iws
+*.ipr
+*.swp
+
+# Local & sensitive configurations
+local.properties
+secrets.properties
+google-services.json
+**/google-services.json
+
+# Signing & Keystore credentials (CRITICAL for security)
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+
+# OS & System generated files
+.DS_Store
+Thumbs.db
+
+# Profiling and logs
+*.hprof
