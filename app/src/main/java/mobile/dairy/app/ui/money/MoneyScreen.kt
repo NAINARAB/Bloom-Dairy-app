@@ -64,7 +64,6 @@ import mobile.dairy.app.ui.components.Eyebrow
 import mobile.dairy.app.ui.components.SectionTitle
 import mobile.dairy.app.ui.components.StatCard
 import mobile.dairy.app.ui.components.WrapChips
-import mobile.dairy.app.ui.dashboard.TabScaffold
 import mobile.dairy.app.ui.theme.BloomColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -127,7 +126,8 @@ class MoneyViewModel @Inject constructor(
 
 @Composable
 fun MoneyScreen(nav: NavController) {
-    mobile.dairy.app.ui.dashboard.MainTabsScreen(nav, Routes.MONEY)
+    // Legacy wrapper
+    MoneyContent(nav)
 }
 
 @Composable

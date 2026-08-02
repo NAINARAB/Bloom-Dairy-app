@@ -76,7 +76,6 @@ import mobile.dairy.app.ui.components.MoodEmojiRow
 import mobile.dairy.app.ui.components.MoodPicker
 import mobile.dairy.app.ui.components.SectionTitle
 import mobile.dairy.app.ui.components.WrapChips
-import mobile.dairy.app.ui.dashboard.TabScaffold
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -104,7 +103,8 @@ class JournalViewModel @Inject constructor(
 
 @Composable
 fun JournalScreen(nav: NavController) {
-    mobile.dairy.app.ui.dashboard.MainTabsScreen(nav, Routes.JOURNAL)
+    // Legacy wrapper
+    JournalContent(nav)
 }
 
 @Composable

@@ -136,7 +136,8 @@ private val PRIORITY_COLOR = mapOf(
 
 @Composable
 fun GoalsScreen(nav: NavController) {
-    mobile.dairy.app.ui.dashboard.MainTabsScreen(nav, Routes.GOALS)
+    // Legacy wrapper
+    GoalsContent(nav)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

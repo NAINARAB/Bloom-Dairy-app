@@ -192,7 +192,7 @@ class DashboardViewModel @Inject constructor(
 }
 
 /* ------------------------------------------------------------------ */
-/* Bottom navigation shared by all tab screens                          */
+/* Navigation shared data                                               */
 /* ------------------------------------------------------------------ */
 
 data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -205,65 +205,23 @@ val TABS = listOf(
     Tab(Routes.INSIGHTS, "Insights", Icons.Default.AutoAwesome),
 )
 
-@Composable
-fun MainTabsScreen(nav: NavController, initialRoute: String = Routes.HOME) {
-    val initialPage = remember(initialRoute) {
-        TABS.indexOfFirst { it.route == initialRoute }.coerceAtLeast(0)
-    }
-    val pagerState = rememberPagerState(initialPage) { TABS.size }
-    val scope = rememberCoroutineScope()
-
-    Scaffold(
-        modifier = Modifier.statusBarsPadding(),
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                TABS.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = pagerState.currentPage == index,
-                        onClick = {
-                            if (pagerState.currentPage != index) {
-                                scope.launch { pagerState.animateScrollToPage(index) }
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                    )
-                }
-            }
-        },
-    ) { padding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().padding(padding)
-        ) { page ->
-            when (TABS[page].route) {
-                Routes.HOME -> DashboardContent(nav)
-                Routes.JOURNAL -> JournalContent(nav)
-                Routes.GOALS -> GoalsContent(nav)
-                Routes.MONEY -> MoneyContent(nav)
-                Routes.INSIGHTS -> InsightsContent(nav)
-            }
-        }
-    }
-}
-
-@Composable
-fun TabScaffold(nav: NavController, current: String, content: @Composable (Modifier) -> Unit) {
-    MainTabsScreen(nav, current)
-}
-
 /* ------------------------------------------------------------------ */
 /* Screen                                                               */
 /* ------------------------------------------------------------------ */
 
 @Composable
 fun DashboardScreen(nav: NavController) {
-    MainTabsScreen(nav, Routes.HOME)
+    // Legacy wrapper, MainActivity now uses DashboardContent directly
+    DashboardContent(nav)
 }
 
 @Composable
-fun DashboardContent(nav: NavController, modifier: Modifier = Modifier, vm: DashboardViewModel = hiltViewModel()) {
+fun DashboardContent(
+    nav: NavController,
+    modifier: Modifier = Modifier,
+    vm: DashboardViewModel = hiltViewModel(),
+    onSwitchTab: (String) -> Unit = {}
+) {
     val s by vm.state.collectAsState()
 
     LaunchedEffect(s.prefs.screenTimeEnabled) {
@@ -331,7 +289,7 @@ fun DashboardContent(nav: NavController, modifier: Modifier = Modifier, vm: Dash
                             Text(if (s.todayEntry != null) "Review today" else "Start check-in", fontWeight = FontWeight.Bold)
                         }
                         OutlinedButton(
-                            onClick = { nav.navigate(Routes.MONEY) },
+                            onClick = { onSwitchTab(Routes.MONEY) },
                             modifier = Modifier.height(54.dp).weight(0.8f),
                             shape = RoundedCornerShape(16.dp)
                         ) { 

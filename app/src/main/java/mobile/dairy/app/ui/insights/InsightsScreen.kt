@@ -54,7 +54,6 @@ import mobile.dairy.app.ui.components.Eyebrow
 import mobile.dairy.app.ui.components.SectionTitle
 import mobile.dairy.app.ui.components.StatCard
 import mobile.dairy.app.ui.components.WrapChips
-import mobile.dairy.app.ui.dashboard.MainTabsScreen
 import mobile.dairy.app.ui.theme.BloomColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -96,7 +95,8 @@ class InsightsViewModel @Inject constructor(
 
 @Composable
 fun InsightsScreen(nav: NavController) {
-    MainTabsScreen(nav, Routes.INSIGHTS)
+    // Legacy wrapper
+    InsightsContent(nav)
 }
 
 @Composable
@@ -109,7 +109,9 @@ fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: Insig
     var customEnd by remember { mutableStateOf<String?>(null) }
 
     if (showDatePicker) {
-        BloomDateRangePicker(
+        mobile.dairy.app.ui.components.BloomTwoDatePickerDialog(
+            initialStartDate = customStart,
+            initialEndDate = customEnd,
             onDismiss = { showDatePicker = false },
             onRangeSelected = { start, end ->
                 customStart = start
@@ -171,12 +173,48 @@ fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: Insig
 
         Spacer(Modifier.height(24.dp))
 
+        // Personal Motivation Assistant Daily Encouragements
+        val dailyInsights = remember(ctx) { InsightEngine.generateDailyInsights(ctx) }
+        if (dailyInsights.isNotEmpty()) {
+            SectionTitle("Personal Motivation Assistant")
+            dailyInsights.forEach { insight ->
+                mobile.dairy.app.ui.components.InsightCard(insight = insight)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         if (ctx.entries.isEmpty()) {
             EmptyState(
                 Icons.Default.BarChart, "Waiting for data",
                 "Bloom needs a few check-ins to start seeing patterns in your mood, money, and goals."
             )
         } else {
+            // Weekly Reflection Summary
+            SectionTitle("Weekly Reflection & Growth")
+            val summary = remember(ctx, rangeStart, rangeEnd) {
+                InsightEngine.generateWeeklySummary(ctx, rangeStart, rangeEnd)
+            }
+            BloomCard {
+                Text(summary.message, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Eyebrow("Check-ins")
+                        Text("${summary.checkins} logged", style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Column {
+                        Eyebrow("Goal Focus")
+                        Text("${summary.goalMinutes} mins", style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Column {
+                        Eyebrow("Avg Rating")
+                        Text(summary.avgOverall?.let { "%.1f/10".format(it) } ?: "–", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
             // Mood Trend
             SectionTitle("Mood trend")
             BloomCard {
@@ -247,9 +285,11 @@ fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: Insig
             }
 
             Spacer(Modifier.height(48.dp))
-            Text(Constants.WELLBEING_DISCLAIMER,
+            Text(
+                "Disclaimer: " + Constants.WELLBEING_DISCLAIMER,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(32.dp))
         }
     }

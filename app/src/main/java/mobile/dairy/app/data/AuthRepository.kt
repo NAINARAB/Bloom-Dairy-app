@@ -1,9 +1,12 @@
 package mobile.dairy.app.data
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -48,28 +51,34 @@ class AuthRepository @Inject constructor(
         auth.sendPasswordResetEmail(email.trim()).await()
     }
 
-    /**
-     * Google Sign-In via Credential Manager (the current recommended flow).
-     * [webClientId] is the *Web* OAuth client from the Firebase console.
-     */
     suspend fun signInWithGoogle(activityContext: Context, webClientId: String) {
-        val option = GetGoogleIdOption.Builder()
-            .setServerClientId(webClientId)
-            .setFilterByAuthorizedAccounts(false)
-            .build()
-        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-        val result = CredentialManager.create(activityContext).getCredential(activityContext, request)
+        try {
+            val option = GetGoogleIdOption.Builder()
+                .setServerClientId(webClientId)
+                .setFilterByAuthorizedAccounts(false)
+                .build()
+            val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+            val result =
+                CredentialManager.create(activityContext).getCredential(activityContext, request)
 
-        val credential = result.credential
-        if (credential is CustomCredential &&
-            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-        ) {
-            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-            val authCred = GoogleAuthProvider.getCredential(idToken, null)
-            val user = auth.signInWithCredential(authCred).await()
-            ensureUserDoc(user.user)
-        } else {
-            error("Google sign-in was cancelled.")
+            val credential = result.credential
+            if (credential is CustomCredential &&
+                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+            ) {
+                val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                val authCred = GoogleAuthProvider.getCredential(idToken, null)
+                val user = auth.signInWithCredential(authCred).await()
+                ensureUserDoc(user.user)
+            }
+        } catch (e: NoCredentialException) {
+            // Silently handle - user likely has no Google accounts signed in on device
+            Log.i("AuthRepo", "No Google credentials found on device.")
+        } catch (e: GetCredentialException) {
+            // Log other credential errors (like cancellation or config issues) silently for a smooth UI
+            Log.w("AuthRepo", "Google Sign-In failed or cancelled: ${e.type}", e)
+        } catch (e: Exception) {
+            Log.e("AuthRepo", "Unexpected Google Sign-In error", e)
+            throw e
         }
     }
 
