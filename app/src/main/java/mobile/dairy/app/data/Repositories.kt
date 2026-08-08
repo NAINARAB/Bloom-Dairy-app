@@ -76,11 +76,17 @@ class FirestorePaths @Inject constructor(
 @Singleton
 class EntryRepository @Inject constructor(private val paths: FirestorePaths) {
 
-    fun entries(days: Long = 90): Flow<List<JournalEntry>> {
-        return paths.col("entries")
-            .orderBy("date", Query.Direction.DESCENDING)
-            .limit(days)
-            .asFlow().map { it.toList<JournalEntry>() }
+    fun entries(limit: Int): Flow<List<JournalEntry>> = entries(limit.toLong(), null, null)
+
+    fun entries(startDate: String? = null, endDate: String? = null): Flow<List<JournalEntry>> =
+        entries(null, startDate, endDate)
+
+    private fun entries(limit: Long?, startDate: String?, endDate: String?): Flow<List<JournalEntry>> {
+        var query: Query = paths.col("entries").orderBy("date", Query.Direction.DESCENDING)
+        if (limit != null) query = query.limit(limit)
+        if (startDate != null) query = query.whereGreaterThanOrEqualTo("date", startDate)
+        if (endDate != null) query = query.whereLessThanOrEqualTo("date", endDate)
+        return query.asFlow().map { it.toList<JournalEntry>() }
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
     }
 
@@ -138,8 +144,7 @@ class GoalRepository @Inject constructor(private val paths: FirestorePaths) {
 
     fun goals(statuses: List<String> = listOf("active")): Flow<List<Goal>> =
         paths.col("goals").whereIn("status", statuses)
-            .orderBy("updatedAt", Query.Direction.DESCENDING)
-            .asFlow().map { it.toList<Goal>() }
+            .asFlow().map { it.toList<Goal>().sortedByDescending { g -> g.updatedAt } }
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
 
     fun goal(id: String): Flow<Goal?> =
@@ -152,11 +157,17 @@ class GoalRepository @Inject constructor(private val paths: FirestorePaths) {
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
 
     /** Flat mirror of all goal updates — one listener for dashboard + insights. */
-    fun updateLog(days: Long = 30): Flow<List<GoalUpdate>> {
-        return paths.col("goalUpdateLog")
-            .orderBy("date", Query.Direction.DESCENDING)
-            .limit(days)
-            .asFlow().map { it.toList<GoalUpdate>() }
+    fun updateLog(limit: Int): Flow<List<GoalUpdate>> = updateLog(limit.toLong(), null, null)
+
+    fun updateLog(startDate: String? = null, endDate: String? = null): Flow<List<GoalUpdate>> =
+        updateLog(null, startDate, endDate)
+
+    private fun updateLog(limit: Long?, startDate: String?, endDate: String?): Flow<List<GoalUpdate>> {
+        var query: Query = paths.col("goalUpdateLog").orderBy("date", Query.Direction.DESCENDING)
+        if (limit != null) query = query.limit(limit)
+        if (startDate != null) query = query.whereGreaterThanOrEqualTo("date", startDate)
+        if (endDate != null) query = query.whereLessThanOrEqualTo("date", endDate)
+        return query.asFlow().map { it.toList<GoalUpdate>() }
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
     }
 
@@ -206,6 +217,30 @@ class GoalRepository @Inject constructor(private val paths: FirestorePaths) {
         }
     }
 
+    suspend fun deleteUpdate(goal: Goal, update: GoalUpdate) {
+        val batch = paths.batch()
+        batch.delete(paths.goalUpdates(goal.id).document(update.id))
+        batch.delete(paths.col("goalUpdateLog").document(update.id))
+        try {
+            batch.commit()
+        } catch (e: Exception) {
+            Log.e("GoalRepo", "Error deleting goal update: ${e.message}", e)
+            throw e
+        }
+    }
+
+    suspend fun editUpdate(goal: Goal, update: GoalUpdate) {
+        val batch = paths.batch()
+        batch.set(paths.goalUpdates(goal.id).document(update.id), update)
+        batch.set(paths.col("goalUpdateLog").document(update.id), update)
+        try {
+            batch.commit()
+        } catch (e: Exception) {
+            Log.e("GoalRepo", "Error editing goal update: ${e.message}", e)
+            throw e
+        }
+    }
+
     suspend fun updateMilestones(goalId: String, milestones: List<mobile.dairy.app.domain.Milestone>) {
         patchGoal(goalId, mapOf("milestones" to milestones))
     }
@@ -213,24 +248,45 @@ class GoalRepository @Inject constructor(private val paths: FirestorePaths) {
     suspend fun updateDailyTasks(goalId: String, tasks: List<mobile.dairy.app.domain.GoalTask>) {
         patchGoal(goalId, mapOf("dailyTasks" to tasks))
     }
+
+    suspend fun deleteGoal(goalId: String) {
+        try {
+            paths.col("goals").document(goalId).delete()
+        } catch (e: Exception) {
+            Log.e("GoalRepo", "Error deleting goal: ${e.message}", e)
+            throw e
+        }
+    }
 }
 
 @Singleton
 class FinanceRepository @Inject constructor(private val paths: FirestorePaths) {
 
-    fun expenses(days: Long = 62): Flow<List<Expense>> {
-        return paths.col("expenses")
-            .orderBy("date", Query.Direction.DESCENDING)
-            .limit(days)
-            .asFlow().map { it.toList<Expense>() }
+    fun expenses(limit: Int): Flow<List<Expense>> = expenses(limit.toLong(), null, null)
+
+    fun expenses(startDate: String? = null, endDate: String? = null): Flow<List<Expense>> =
+        expenses(null, startDate, endDate)
+
+    private fun expenses(limit: Long?, startDate: String?, endDate: String?): Flow<List<Expense>> {
+        var query: Query = paths.col("expenses").orderBy("date", Query.Direction.DESCENDING)
+        if (limit != null) query = query.limit(limit)
+        if (startDate != null) query = query.whereGreaterThanOrEqualTo("date", startDate)
+        if (endDate != null) query = query.whereLessThanOrEqualTo("date", endDate)
+        return query.asFlow().map { it.toList<Expense>() }
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
     }
 
-    fun savings(days: Long = 62): Flow<List<Saving>> {
-        return paths.col("savings")
-            .orderBy("date", Query.Direction.DESCENDING)
-            .limit(days)
-            .asFlow().map { it.toList<Saving>() }
+    fun savings(limit: Int): Flow<List<Saving>> = savings(limit.toLong(), null, null)
+
+    fun savings(startDate: String? = null, endDate: String? = null): Flow<List<Saving>> =
+        savings(null, startDate, endDate)
+
+    private fun savings(limit: Long?, startDate: String?, endDate: String?): Flow<List<Saving>> {
+        var query: Query = paths.col("savings").orderBy("date", Query.Direction.DESCENDING)
+        if (limit != null) query = query.limit(limit)
+        if (startDate != null) query = query.whereGreaterThanOrEqualTo("date", startDate)
+        if (endDate != null) query = query.whereLessThanOrEqualTo("date", endDate)
+        return query.asFlow().map { it.toList<Saving>() }
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
     }
 
@@ -264,6 +320,35 @@ class FinanceRepository @Inject constructor(private val paths: FirestorePaths) {
             throw e
         }
     }
+
+    suspend fun updateExpense(expense: Expense) {
+        try {
+            paths.col("expenses").document(expense.id)
+                .set(expense)
+        } catch (e: Exception) {
+            Log.e("FinanceRepo", "Error updating expense: ${e.message}", e)
+            throw e
+        }
+    }
+
+    suspend fun updateSaving(saving: Saving) {
+        try {
+            paths.col("savings").document(saving.id)
+                .set(saving)
+        } catch (e: Exception) {
+            Log.e("FinanceRepo", "Error updating saving: ${e.message}", e)
+            throw e
+        }
+    }
+
+    suspend fun deleteSaving(id: String) {
+        try {
+            paths.col("savings").document(id).delete()
+        } catch (e: Exception) {
+            Log.e("FinanceRepo", "Error deleting saving: ${e.message}", e)
+            throw e
+        }
+    }
 }
 
 @Singleton
@@ -271,8 +356,11 @@ class InsightRepository @Inject constructor(private val paths: FirestorePaths) {
 
     fun unseen(max: Long = 3): Flow<List<Insight>> =
         paths.col("insights").whereEqualTo("seen", false)
-            .orderBy("createdAt", Query.Direction.DESCENDING).limit(max)
-            .asFlow().map { it.toList<Insight>() }
+            .asFlow().map {
+                it.toList<Insight>()
+                    .sortedByDescending { i -> i.createdAt }
+                    .take(max.toInt())
+            }
             .catch { Log.e("Repo", "Error", it); emit(emptyList()) }
 
     /** Keyed by date+type, so re-running the engine can never spam the user. */

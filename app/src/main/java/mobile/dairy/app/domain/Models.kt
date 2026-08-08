@@ -12,6 +12,26 @@ import kotlinx.serialization.Serializable
  */
 
 @Serializable
+data class CategoryDef(
+    var key: String = "",
+    var label: String = "",
+    var emoji: String = ""
+)
+
+@Serializable
+data class JournalQuestionDef(
+    var id: String = "",
+    var title: String = "",
+    var subtitle: String? = null,
+    var type: String = "text", // text, emoji, person, rating_group, date, dropdown, number, toggle, slider
+    var isActive: Boolean = true,
+    var isMandatory: Boolean = false,
+    var isCustom: Boolean = false,
+    var options: List<String> = emptyList(), // For dropdowns
+    var maxChars: Int? = null
+)
+
+@Serializable
 data class PersonRef(
     var name: String = "",
     /** a mood key, or "stronger" */
@@ -40,6 +60,7 @@ data class JournalEntry(
     var note: String? = null,
     var favorite: Boolean = false,
     var important: Boolean = false,
+    var customAnswers: Map<String, String> = emptyMap(),
 )
 
 data class DailyRating(
@@ -116,7 +137,8 @@ data class Saving(
     var id: String = "",
     var date: String = "",
     var amount: Double = 0.0,
-    var kind: String = "saved",          // saved | avoided
+    var category: String = "other",
+    var kind: String = "earned",         // earned | avoided
     var note: String? = null,
     var createdAt: Long = 0,
 )
@@ -157,6 +179,37 @@ data class AppPrefs(
     var lockEnabled: Boolean = false,
     var privateNotifications: Boolean = false,
     var screenTimeEnabled: Boolean = false,
+    var transactionCategories: List<CategoryDef> = listOf(
+        CategoryDef("food", "Food & dining", "🍱"),
+        CategoryDef("food-delivery", "Food delivery", "🛵"),
+        CategoryDef("groceries", "Groceries", "🛒"),
+        CategoryDef("transport", "Transport", "🚌"),
+        CategoryDef("shopping", "Shopping", "🛍️"),
+        CategoryDef("bills", "Bills & recharge", "🧾"),
+        CategoryDef("entertainment", "Entertainment", "🎬"),
+        CategoryDef("health", "Health", "🩻"),
+        CategoryDef("education", "Education", "📚"),
+        CategoryDef("family", "Family & gifts", "🎁"),
+        CategoryDef("other", "Other", "💠")
+    ),
+    var journalQuestions: List<JournalQuestionDef> = listOf(
+        // Mandatory (6)
+        JournalQuestionDef("q_feeling", "How are you feeling?", "Pick everything that fits — days are rarely one thing.", "emoji", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_feeling_reason", "What made you feel this way?", "Situations, habits — tap or add your own.", "text", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_people", "Who made your day?", "People who made you feel stronger, happy, or even stressed.", "person", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_lessons", "Lessons learned?", "What did today teach you?", "text", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_rating", "Rate your day", null, "rating_group", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_anything_else", "Anything else for today?", "A free note, a memory, a thought for future-you.", "text", isMandatory = true, isActive = true),
+        
+        // Optional (7)
+        JournalQuestionDef("q_best_part", "Best part of your day?", null, "text", isMandatory = false, isActive = false),
+        JournalQuestionDef("q_hardest_part", "And the most difficult part?", "Naming it is often half the weight.", "text", isMandatory = false, isActive = false),
+        JournalQuestionDef("q_good_things", "Good things today?", "Successes, kindnesses, or just things that went well.", "text", isMandatory = false, isActive = false),
+        JournalQuestionDef("q_mistakes", "Any mistakes or bad choices?", "Honesty with yourself is the first step to growth.", "text", isMandatory = false, isActive = false),
+        JournalQuestionDef("q_gratitude", "What are you grateful for?", "Small things count.", "text", isMandatory = false, isActive = false),
+        JournalQuestionDef("q_good_decision", "One good decision you made?", null, "text", isMandatory = false, isActive = false),
+        JournalQuestionDef("q_improve_tomorrow", "What would you improve tomorrow?", "Small and realistic beats grand and forgotten.", "text", isMandatory = false, isActive = false)
+    )
 )
 
 data class DeviceToken(

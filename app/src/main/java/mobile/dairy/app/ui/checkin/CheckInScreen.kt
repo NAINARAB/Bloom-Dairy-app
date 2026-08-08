@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -91,6 +92,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -111,9 +113,14 @@ class CheckInViewModel @Inject constructor(
     val draft = MutableStateFlow(CheckinDraft(date = today))
     val goals = goalRepo.goals(listOf("active"))
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val appPrefs = prefsRepo.appPrefs()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, mobile.dairy.app.domain.AppPrefs())
     val saving = MutableStateFlow(false)
     val doneMessage = MutableStateFlow<String?>(null)
     val errorMessage = MutableStateFlow<String?>(null)
+
+    val recentPeople = entryRepo.entries(30).map { entries -> entries.flatMap { it.people }.distinctBy { it.name }.take(10) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         // Draft recovery: restore only if it belongs to today.
@@ -159,6 +166,7 @@ class CheckInViewModel @Inject constructor(
                         favorite = recentEntries.firstOrNull { it.date == today }?.favorite ?: false,
                         important = recentEntries.firstOrNull { it.date == today }?.important ?: false,
                         createdAt = recentEntries.firstOrNull { it.date == today }?.createdAt ?: 0,
+                        customAnswers = d.customAnswers,
                     )
                     entryRepo.upsertEntry(entry)
                     entryRepo.upsertRating(
@@ -168,16 +176,7 @@ class CheckInViewModel @Inject constructor(
                     // Ensure everything is synced before clearing draft
                     kotlinx.coroutines.delay(500)
 
-                    d.spent.toDoubleOrNull()?.takeIf { it > 0 }?.let {
-                        financeRepo.addExpense(Expense(date = today, amount = it, category = "other",
-                            necessity = "necessary", note = "Daily check-in total"))
-                    }
-                    d.saved.toDoubleOrNull()?.takeIf { it > 0 }?.let {
-                        financeRepo.addSaving(Saving(date = today, amount = it, kind = "saved"))
-                    }
-                    d.avoided.toDoubleOrNull()?.takeIf { it > 0 }?.let {
-                        financeRepo.addSaving(Saving(date = today, amount = it, kind = "avoided"))
-                    }
+                    // Removed Finance saving logic as per journal streamlining
 
                     // Supportive completion message from the on-device engine.
                     val ctx = InsightContext(
@@ -226,29 +225,21 @@ class CheckInViewModel @Inject constructor(
 /* Screen                                                               */
 /* ------------------------------------------------------------------ */
 
-private val STEP_TITLES = listOf(
-    "How are you feeling?" to "Pick everything that fits — days are rarely one thing.",
-    "What made you feel this way?" to "Situations, habits — tap or add your own.",
-    "Who influenced your day?" to "People who made you feel stronger, happy, or even stressed.",
-    "Best part of your day?" to null,
-    "And the most difficult part?" to "Naming it is often half the weight.",
-    "Good things today?" to "Successes, kindnesses, or just things that went well.",
-    "Any mistakes or bad choices?" to "Honesty with yourself is the first step to growth.",
-    "Lessons learned?" to "What did today teach you?",
-    "What are you grateful for?" to "Small things count.",
-    "One good decision you made?" to null,
-    "What would you improve tomorrow?" to "Small and realistic beats grand and forgotten.",
-    "Rate your day" to null,
-    "Money today" to "Rough numbers are fine — awareness is the goal.",
-    "Anything else for today?" to "A free note, a memory, a thought for future-you.",
-)
+
 
 @Composable
 fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
+    val appPrefs by vm.appPrefs.collectAsState()
     val draft by vm.draft.collectAsState()
     val goals by vm.goals.collectAsState()
     val saving by vm.saving.collectAsState()
     val done by vm.doneMessage.collectAsState()
+    val errorMessage by vm.errorMessage.collectAsState()
+    val recentPeople by vm.recentPeople.collectAsState()
+
+    val activeQuestions = remember(appPrefs.journalQuestions) {
+        appPrefs.journalQuestions.filter { it.isActive }
+    }
 
     if (done != null) {
         Column(
@@ -281,15 +272,13 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
         return
     }
 
-    val steps = STEP_TITLES
-    val pager = rememberPagerState { steps.size }
+    val pager = rememberPagerState { activeQuestions.size }
     val scope = rememberCoroutineScope()
 
     Scaffold(
         modifier = Modifier.imePadding(),
         topBar = {
-            Column(Modifier.statusBarsPadding()) {
-                Spacer(Modifier.height(12.dp))
+            Column {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -303,7 +292,7 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                     
                     // Progress Indicator
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        repeat(steps.size) { i ->
+                        repeat(activeQuestions.size) { i ->
                             Box(
                                 Modifier
                                     .size(width = if (i == pager.currentPage) 24.dp else 8.dp, height = 8.dp)
@@ -337,12 +326,13 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                     ) { Text("Back") }
                 }
                 
+                val isLast = pager.currentPage == activeQuestions.size - 1
                 Button(
                     onClick = {
-                        if (pager.currentPage < steps.size - 1) {
-                            scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-                        } else {
+                        if (isLast) {
                             vm.finish()
+                        } else {
+                            scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
                         }
                     },
                     modifier = Modifier.weight(2f).height(56.dp),
@@ -351,7 +341,7 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                 ) {
                     Text(
                         if (saving) "Saving..." 
-                        else if (pager.currentPage == steps.size - 1) "Complete" 
+                        else if (isLast) "Complete" 
                         else "Next",
                         fontWeight = FontWeight.Bold
                     )
@@ -363,58 +353,88 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
             state = pager,
             modifier = Modifier.padding(padding).fillMaxSize(),
             userScrollEnabled = false,
-            // Removed contentPadding to prevent adjacent pages from being visible
-            // Padding is now handled inside each step's Column
         ) { page ->
-            val (title, hint) = steps[page]
+            val q = activeQuestions[page]
             Column(
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp) // Added padding here instead
+                    .padding(horizontal = 24.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(title, style = MaterialTheme.typography.headlineSmall)
-                if (hint != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(hint, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
                 Spacer(Modifier.height(32.dp))
-                StepContent(title, draft, goals, vm::patch)
+                Text(
+                    text = q.title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                if (q.subtitle != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = q.subtitle!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Spacer(Modifier.height(48.dp))
+
+                StepContent(q, draft, goals, recentPeople, vm::patch)
             }
         }
     }
 
-    if (saving) {
-        Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)),
-            contentAlignment = Alignment.Center
-        ) {
-            BloomCard(modifier = Modifier.width(280.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(strokeWidth = 3.dp)
-                    Spacer(Modifier.height(16.dp))
-                    Text("Syncing with Bloom...", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-    }
+    mobile.dairy.app.ui.components.GlobalLoadingOverlay(saving)
 }
 
 @Composable
 private fun StepContent(
-    title: String,
+    q: mobile.dairy.app.domain.JournalQuestionDef,
     draft: CheckinDraft,
     goals: List<Goal>,
+    recentPeople: List<PersonRef>,
     patch: ((CheckinDraft) -> CheckinDraft) -> Unit,
 ) {
-    when (title) {
-        "How are you feeling?" -> MoodPicker(draft.moods) { key ->
+    if (q.isCustom) {
+        val currentValue = draft.customAnswers[q.id] ?: ""
+        when (q.type) {
+            "text" -> NoteField(currentValue, "Enter your answer...", minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "number" -> NoteField(currentValue, "0", numeric = true, single = true) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "slider" -> RatingScale(q.title, Icons.Default.AutoAwesome, currentValue.toIntOrNull() ?: 5) { n -> patch { it.copy(customAnswers = it.customAnswers + (q.id to n.toString())) } }
+            "toggle" -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Text("No", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(16.dp))
+                    Switch(checked = currentValue == "yes", onCheckedChange = { isChecked -> patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to if (isChecked) "yes" else "no")) } })
+                    Spacer(Modifier.width(16.dp))
+                    Text("Yes", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            "dropdown" -> {
+                WrapChips {
+                    q.options.forEach { opt ->
+                        FilterChip(
+                            selected = currentValue == opt,
+                            onClick = { patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to opt)) } },
+                            label = { Text(opt) }
+                        )
+                    }
+                }
+            }
+            else -> NoteField(currentValue, "...", minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+        }
+        return
+    }
+
+    when (q.id) {
+        "q_feeling" -> MoodPicker(draft.moods) { key ->
             patch { d ->
                 d.copy(moods = if (d.moods.contains(key)) d.moods - key else d.moods + key)
             }
         }
 
-        "What made you feel this way?" -> {
+        "q_feeling_reason" -> {
             WrapChips {
                 (Constants.CAUSE_SUGGESTIONS + draft.moodCauses).distinct().forEach { c ->
                     FilterChip(
@@ -430,33 +450,33 @@ private fun StepContent(
             }
         }
 
-        "Who influenced your day?" -> {
-            PeopleFeelingPicker(draft.people) { newList ->
+        "q_people" -> {
+            PeopleFeelingPicker(draft.people, recentPeople) { newList ->
                 patch { it.copy(people = newList) }
             }
         }
 
-        "Best part of your day?" -> NoteField(draft.bestPart, "A moment worth remembering…") { v ->
+        "q_best_part" -> NoteField(draft.bestPart, "A moment worth remembering…") { v ->
             patch { it.copy(bestPart = v) }
         }
 
-        "And the most difficult part?" -> NoteField(draft.hardestPart, "What was heavy today…") { v ->
+        "q_hardest_part" -> NoteField(draft.hardestPart, "What was heavy today…") { v ->
             patch { it.copy(hardestPart = v) }
         }
 
-        "Good things today?" -> NoteField(draft.goodThings, "Something you did well or something good that happened...") { v ->
+        "q_good_things" -> NoteField(draft.goodThings, "Something you did well or something good that happened...") { v ->
             patch { it.copy(goodThings = v) }
         }
 
-        "Any mistakes or bad choices?" -> NoteField(draft.mistakes, "It's okay to be honest with yourself...") { v ->
+        "q_mistakes" -> NoteField(draft.mistakes, "It's okay to be honest with yourself...") { v ->
             patch { it.copy(mistakes = v) }
         }
 
-        "Lessons learned?" -> NoteField(draft.lessons, "What's the takeaway from today?") { v ->
+        "q_lessons" -> NoteField(draft.lessons, "What's the takeaway from today?") { v ->
             patch { it.copy(lessons = v) }
         }
 
-        "What are you grateful for?" -> {
+        "q_gratitude" -> {
             WrapChips {
                 (Constants.GRATITUDE_SUGGESTIONS + draft.gratitude).distinct().forEach { g ->
                     FilterChip(
@@ -472,7 +492,7 @@ private fun StepContent(
             }
         }
 
-        "One good decision you made?" -> {
+        "q_good_decision" -> {
             WrapChips {
                 Constants.DECISION_SUGGESTIONS.forEach { c ->
                     FilterChip(selected = draft.goodDecision == c,
@@ -485,7 +505,7 @@ private fun StepContent(
             }
         }
 
-        "What would you improve tomorrow?" -> {
+        "q_improve_tomorrow" -> {
             WrapChips {
                 Constants.IMPROVEMENT_SUGGESTIONS.forEach { c ->
                     FilterChip(selected = draft.improvement == c,
@@ -498,23 +518,12 @@ private fun StepContent(
             }
         }
 
-        "Rate your day" -> {
+        "q_rating" -> {
             RatingScale("Overall day", Icons.Default.WbSunny, draft.overall) { n -> patch { it.copy(overall = n) } }
             RatingScale("Focus", Icons.Default.FilterCenterFocus, draft.focus) { n -> patch { it.copy(focus = n) } }
-            RatingScale("Effort on goals", Icons.Default.Speed, draft.effort) { n -> patch { it.copy(effort = n) } }
         }
 
-        "Money today" -> {
-            NoteField(draft.spent, "Spent", single = true, numeric = true) { v -> patch { it.copy(spent = v) } }
-            Spacer(Modifier.height(10.dp))
-            NoteField(draft.saved, "Saved", single = true, numeric = true) { v -> patch { it.copy(saved = v) } }
-            Spacer(Modifier.height(10.dp))
-            NoteField(draft.avoided, "Unnecessary spending you avoided", single = true, numeric = true) { v ->
-                patch { it.copy(avoided = v) }
-            }
-        }
-
-        "Anything else for today?" -> NoteField(draft.note, "Dear diary…", minLines = 5) { v ->
+        "q_anything_else" -> NoteField(draft.note, "Dear diary…", minLines = 5) { v ->
             patch { it.copy(note = v) }
         }
     }
@@ -527,7 +536,7 @@ private fun NoteField(
     single: Boolean = false,
     numeric: Boolean = false,
     minLines: Int = 3,
-    autoFocus: Boolean = true,
+    autoFocus: Boolean = false,
     onChange: (String) -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -557,7 +566,7 @@ private fun NoteField(
 }
 
 @Composable
-fun PeopleFeelingPicker(people: List<PersonRef>, onUpdate: (List<PersonRef>) -> Unit) {
+fun PeopleFeelingPicker(people: List<PersonRef>, recentPeople: List<PersonRef>, onUpdate: (List<PersonRef>) -> Unit) {
     var newName by remember { mutableStateOf("") }
 
     Column {
@@ -580,6 +589,22 @@ fun PeopleFeelingPicker(people: List<PersonRef>, onUpdate: (List<PersonRef>) -> 
                 enabled = newName.isNotBlank()
             ) {
                 Text("Add")
+            }
+        }
+
+        if (recentPeople.isNotEmpty() && newName.isBlank() && people.isEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text("Recent people", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            WrapChips {
+                recentPeople.forEach { p ->
+                    FilterChip(
+                        selected = false,
+                        onClick = { onUpdate(people + p) },
+                        label = { Text(p.name) },
+                        leadingIcon = { Text(if (p.feeling == "stronger") "💪" else if (p.feeling == "stressed") "😫" else "😊") }
+                    )
+                }
             }
         }
 

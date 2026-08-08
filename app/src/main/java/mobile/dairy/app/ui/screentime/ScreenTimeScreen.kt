@@ -140,7 +140,6 @@ fun ScreenTimeScreen(nav: NavController, vm: ScreenTimeViewModel = hiltViewModel
     }
     
     Scaffold(
-        modifier = Modifier.statusBarsPadding(),
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Screen Time", style = MaterialTheme.typography.titleMedium) },

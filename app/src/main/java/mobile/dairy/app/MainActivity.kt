@@ -44,6 +44,7 @@ import mobile.dairy.app.ui.screentime.ScreenTimeScreen
 import mobile.dairy.app.ui.settings.SettingsScreen
 import mobile.dairy.app.ui.theme.BloomTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() { // FragmentActivity: required by BiometricPrompt
@@ -67,12 +68,16 @@ object Routes {
     const val GOALS = "goals"
     const val MONEY = "money"
     const val INSIGHTS = "insights"
+    const val SCREEN_TIME = "screen-time"
     const val CHECK_IN = "check-in"
     const val NEW_GOAL = "goal/new"
     const val GOAL_DETAIL = "goal/{id}"
     const val ENTRY = "entry/{date}"
-    const val SCREEN_TIME = "screen-time"
     const val SETTINGS = "settings"
+    const val SETTINGS_APPEARANCE = "settings/appearance"
+    const val SETTINGS_CATEGORIES = "settings/categories"
+    const val SETTINGS_JOURNAL = "settings/journal"
+    const val SETTINGS_PRIVACY = "settings/privacy"
 
     fun goal(id: String) = "goal/$id"
     fun entry(date: String) = "entry/$date"
@@ -94,7 +99,14 @@ fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
                 user == null -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { AuthScreen() }
                 locked && prefs.lockEnabled -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { LockScreen(onUnlocked = vm::unlock) }
                 !onboarded -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { OnboardingScreen() }
-                else -> BloomNavHost()
+                else -> {
+                    Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { 
+                        BloomNavHost() 
+                        
+                        val globalLoading by vm.globalLoading.collectAsState()
+                        mobile.dairy.app.ui.components.GlobalLoadingOverlay(globalLoading)
+                    }
+                }
             }
         }
     }
@@ -121,20 +133,34 @@ fun BloomNavHost() {
         }
         composable(Routes.SCREEN_TIME) { ScreenTimeScreen(nav) }
         composable(Routes.SETTINGS) { SettingsScreen(nav) }
+        composable(Routes.SETTINGS_APPEARANCE) { mobile.dairy.app.ui.settings.AppearanceSettingsScreen(nav) }
+        composable(Routes.SETTINGS_CATEGORIES) { mobile.dairy.app.ui.settings.CategorySettingsScreen(nav) }
+        composable(Routes.SETTINGS_JOURNAL) { mobile.dairy.app.ui.settings.JournalSettingsScreen(nav) }
+        composable(Routes.SETTINGS_PRIVACY) { mobile.dairy.app.ui.settings.PrivacySettingsScreen(nav) }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(rootNav: androidx.navigation.NavController) {
-    var currentTab by rememberSaveable { mutableStateOf(Routes.HOME) }
+    val initialPage = remember { TABS.indexOfFirst { it.route == Routes.HOME }.takeIf { it >= 0 } ?: 0 }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { TABS.size }
+    )
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     Scaffold(
         bottomBar = {
             NavigationBar(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
-                TABS.forEach { tab ->
+                TABS.forEachIndexed { index, tab ->
                     NavigationBarItem(
-                        selected = currentTab == tab.route,
-                        onClick = { currentTab = tab.route },
+                        selected = pagerState.currentPage == index,
+                        onClick = { 
+                            coroutineScope.launch { 
+                                pagerState.animateScrollToPage(index) 
+                            } 
+                        },
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
                         label = { Text(tab.label) },
                     )
@@ -142,13 +168,23 @@ fun MainScreen(rootNav: androidx.navigation.NavController) {
             }
         }
     ) { innerPadding ->
-        val modifier = Modifier.padding(innerPadding)
-        when (currentTab) {
-            Routes.HOME -> DashboardContent(rootNav, modifier) { tab -> currentTab = tab }
-            Routes.JOURNAL -> mobile.dairy.app.ui.journal.JournalContent(rootNav, modifier)
-            Routes.GOALS -> mobile.dairy.app.ui.goals.GoalsContent(rootNav, modifier)
-            Routes.MONEY -> mobile.dairy.app.ui.money.MoneyContent(rootNav, modifier)
-            Routes.INSIGHTS -> mobile.dairy.app.ui.insights.InsightsContent(rootNav, modifier)
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.padding(innerPadding).fillMaxSize()
+        ) { page ->
+            val modifier = Modifier.fillMaxSize()
+            when (TABS[page].route) {
+                Routes.HOME -> DashboardContent(rootNav, modifier) { tabRoute -> 
+                    val targetIndex = TABS.indexOfFirst { it.route == tabRoute }
+                    if (targetIndex >= 0) {
+                        coroutineScope.launch { pagerState.animateScrollToPage(targetIndex) }
+                    }
+                }
+                Routes.JOURNAL -> mobile.dairy.app.ui.journal.JournalContent(rootNav, modifier)
+                Routes.GOALS -> mobile.dairy.app.ui.goals.GoalsContent(rootNav, modifier)
+                Routes.MONEY -> mobile.dairy.app.ui.money.MoneyContent(rootNav, modifier)
+                Routes.INSIGHTS -> mobile.dairy.app.ui.insights.InsightsContent(rootNav, modifier)
+            }
         }
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -146,7 +147,6 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
     val context = LocalContext.current
 
     Scaffold(
-        modifier = Modifier.statusBarsPadding(),
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Settings", style = MaterialTheme.typography.titleMedium) },
@@ -180,69 +180,34 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
                 }
             }
 
-            SectionTitle("Appearance")
+            Spacer(Modifier.height(16.dp))
             BloomCard {
-                Eyebrow("Theme")
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (m, label) ->
-                        val sel = p.theme == m
-                        FilterChip(
-                            selected = sel,
-                            onClick = { vm.save(mapOf("theme" to m)) },
-                            label = { Text(label) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                
-                Spacer(Modifier.height(24.dp))
-                Eyebrow("Accent color")
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ACCENTS.keys.forEach { key ->
-                        val color = if (isSystemInDarkTheme()) ACCENTS[key]!!.dark else ACCENTS[key]!!.light
-                        AccentDot(color, p.accent == key) { vm.save(mapOf("accent" to key)) }
-                    }
-                }
-            }
-
-            SectionTitle("Notifications")
-            BloomCard {
-                SettingSwitch(
-                    "All reminders", "Master switch for daily nudges",
-                    r.enabled, { on -> vm.saveReminders { it.copy(enabled = on) } }
+                SettingsMenuRow(
+                    title = "Appearance",
+                    subtitle = "Theme and accent colors",
+                    onClick = { nav.navigate(mobile.dairy.app.Routes.SETTINGS_APPEARANCE) }
                 )
-                
-                if (r.enabled) {
-                    Divider(Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    
-                    Text("Daily Reminders", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(12.dp))
-                    
-                    NotificationCategory.entries.forEach { cat ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(cat.label, style = MaterialTheme.typography.bodyLarge)
-                                Text(cat.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Text(
-                                String.format("%02d:00", r.times[cat.name] ?: cat.defaultHour ?: 20),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                    .clickable { 
-                                        val h = r.times[cat.name] ?: 20
-                                        vm.saveReminders { it.copy(times = it.times + (cat.name to (h + 4) % 24)) }
-                                    }
-                            )
-                        }
-                    }
-                }
+                Divider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SettingsMenuRow(
+                    title = "Journal Template",
+                    subtitle = "Customize your daily check-in questions",
+                    onClick = { nav.navigate(mobile.dairy.app.Routes.SETTINGS_JOURNAL) }
+                )
+                Divider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SettingsMenuRow(
+                    title = "Transaction Categories",
+                    subtitle = "Manage tags for spending and earning",
+                    onClick = { nav.navigate(mobile.dairy.app.Routes.SETTINGS_CATEGORIES) }
+                )
+                Divider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SettingsMenuRow(
+                    title = "Notifications",
+                    subtitle = "Manage your daily reminders",
+                    onClick = { nav.navigate(mobile.dairy.app.Routes.SETTINGS_PRIVACY) }
+                )
             }
 
+            Spacer(Modifier.height(32.dp))
             SectionTitle("Data & Privacy")
             BloomCard {
                 SettingSwitch(
@@ -281,7 +246,7 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
             
             Spacer(Modifier.height(48.dp))
             Text(Constants.WELLBEING_DISCLAIMER,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(48.dp))
         }
@@ -289,7 +254,7 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
 }
 
 @Composable
-private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -301,5 +266,23 @@ private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onC
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+fun SettingsMenuRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

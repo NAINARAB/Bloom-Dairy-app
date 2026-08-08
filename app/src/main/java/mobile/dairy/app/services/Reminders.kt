@@ -44,11 +44,17 @@ class ReminderScheduler @Inject constructor(
         if (!settings.enabled) return
 
         copies.keys.forEachIndexed { index, key ->
-            val hour = settings.times[key] ?: return@forEachIndexed
-            if (inQuietHours(hour, settings.quietStart, settings.quietEnd)) return@forEachIndexed
+            if (settings.disabledCategories.contains(key)) return@forEachIndexed
+
+            val minuteOfDay = settings.timeMinutes[key] ?: (settings.times[key]?.times(60)) ?: return@forEachIndexed
+            val h = minuteOfDay / 60
+            val m = minuteOfDay % 60
+            
+            if (inQuietHours(h, settings.quietStart, settings.quietEnd)) return@forEachIndexed
+            
             val at = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, 0)
+                set(Calendar.HOUR_OF_DAY, h)
+                set(Calendar.MINUTE, m)
                 set(Calendar.SECOND, 0)
                 if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
             }

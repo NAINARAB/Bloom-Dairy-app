@@ -133,6 +133,7 @@ class DashboardViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val today = Dates.todayKey()
+    private val generatedInsightIds = mutableSetOf<String>()
 
     val state: StateFlow<DashboardState> = combine(
         entryRepo.entries(30),
@@ -153,8 +154,14 @@ class DashboardViewModel @Inject constructor(
             expenses = b.expenses, savings = b.savings, screenTime = b.screenTime,
         )
         // On-device motivation engine — keyed by date+type, so re-runs never spam.
-        viewModelScope.launch {
-            runCatching { insightRepo.saveAll(InsightEngine.generateDailyInsights(ctx)) }
+        val newInsights = InsightEngine.generateDailyInsights(ctx).filter { it.id !in generatedInsightIds }
+        if (newInsights.isNotEmpty()) {
+            viewModelScope.launch {
+                runCatching { 
+                    insightRepo.saveAll(newInsights) 
+                    generatedInsightIds.addAll(newInsights.map { it.id })
+                }
+            }
         }
         DashboardState(
             today = today,
@@ -344,9 +351,10 @@ fun DashboardContent(
                     StatCard("Screen", s.screenToday?.let { Format.minutes(it.totalMinutes) } ?: "–", Modifier.weight(1f), icon = Icons.Default.Smartphone)
                 }
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatCard("Spent today", Format.money(s.money.spent, s.prefs.currency), Modifier.weight(1f))
-                    StatCard("Saved + avoided", Format.money(s.money.saved + s.money.avoided, s.prefs.currency),
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    StatCard("Spent today", Format.money(s.money.spent, s.prefs.currency),
+                        Modifier.weight(1f), good = false, emphasize = true)
+                    StatCard("Earned + avoided", Format.money(s.money.earned + s.money.avoided, s.prefs.currency),
                         Modifier.weight(1f), good = true)
                 }
 

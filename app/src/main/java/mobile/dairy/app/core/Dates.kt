@@ -49,6 +49,19 @@ object Dates {
         return key(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate())
     }
 
+    fun formatDateTime(ms: Long): String {
+        try {
+            val instant = java.time.Instant.ofEpochMilli(ms)
+            val zonedDateTime = instant.atZone(java.time.ZoneId.systemDefault())
+            val dateKey = key(zonedDateTime.toLocalDate())
+            val dateStr = friendly(dateKey)
+            val timeStr = zonedDateTime.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))
+            return "$dateStr, $timeStr"
+        } catch (e: Exception) {
+            return fromMillis(ms)
+        }
+    }
+
     fun greetingForHour(hour: Int): String = when {
         hour < 5 -> "Up late"
         hour < 12 -> "Good morning"

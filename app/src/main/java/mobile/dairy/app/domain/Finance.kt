@@ -7,7 +7,7 @@ data class DayMoney(
     val spent: Double,
     val necessary: Double,
     val unnecessary: Double,
-    val saved: Double,
+    val earned: Double,
     val avoided: Double,
 )
 
@@ -15,9 +15,9 @@ data class RangeTotals(
     val spent: Double,
     val necessary: Double,
     val unnecessary: Double,
-    val saved: Double,
+    val earned: Double,
     val avoided: Double,
-    /** avoided + saved: the money kept through deliberate decisions */
+    /** avoided + earned: the money kept through deliberate decisions or earned */
     val keptThroughDecisions: Double,
 )
 
@@ -31,7 +31,7 @@ data class CategoryTrend(
 object Finance {
 
     fun summarizeDay(date: String, expenses: List<Expense>, savings: List<Saving>): DayMoney {
-        var spent = 0.0; var necessary = 0.0; var unnecessary = 0.0; var saved = 0.0; var avoided = 0.0
+        var spent = 0.0; var necessary = 0.0; var unnecessary = 0.0; var earned = 0.0; var avoided = 0.0
         for (e in expenses) {
             if (e.date != date) continue
             spent += e.amount
@@ -39,13 +39,14 @@ object Finance {
         }
         for (s in savings) {
             if (s.date != date) continue
-            if (s.kind == "saved") saved += s.amount else avoided += s.amount
+            // support legacy 'saved' by mapping to 'earned'
+            if (s.kind == "earned" || s.kind == "saved") earned += s.amount else avoided += s.amount
         }
-        return DayMoney(date, spent, necessary, unnecessary, saved, avoided)
+        return DayMoney(date, spent, necessary, unnecessary, earned, avoided)
     }
 
     fun totalsInRange(from: String, to: String, expenses: List<Expense>, savings: List<Saving>): RangeTotals {
-        var spent = 0.0; var necessary = 0.0; var unnecessary = 0.0; var saved = 0.0; var avoided = 0.0
+        var spent = 0.0; var necessary = 0.0; var unnecessary = 0.0; var earned = 0.0; var avoided = 0.0
         for (e in expenses) {
             if (e.date < from || e.date > to) continue
             spent += e.amount
@@ -53,9 +54,9 @@ object Finance {
         }
         for (s in savings) {
             if (s.date < from || s.date > to) continue
-            if (s.kind == "saved") saved += s.amount else avoided += s.amount
+            if (s.kind == "earned" || s.kind == "saved") earned += s.amount else avoided += s.amount
         }
-        return RangeTotals(spent, necessary, unnecessary, saved, avoided, saved + avoided)
+        return RangeTotals(spent, necessary, unnecessary, earned, avoided, earned + avoided)
     }
 
     fun categoryTotals(from: String, to: String, expenses: List<Expense>): Map<String, Double> {

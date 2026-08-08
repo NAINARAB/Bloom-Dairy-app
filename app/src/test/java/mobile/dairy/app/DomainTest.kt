@@ -57,7 +57,7 @@ class DomainTest {
         assertEquals(350.0, s.spent, 0.001)
         assertEquals(200.0, s.necessary, 0.001)
         assertEquals(150.0, s.unnecessary, 0.001)
-        assertEquals(500.0, s.saved, 0.001)
+        assertEquals(500.0, s.earned, 0.001)
         assertEquals(300.0, s.avoided, 0.001)
     }
 

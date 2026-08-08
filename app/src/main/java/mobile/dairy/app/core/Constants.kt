@@ -57,24 +57,6 @@ enum class Mood(val label: String, val emoji: String, val icon: ImageVector, val
     }
 }
 
-enum class ExpenseCategory(val key: String, val label: String, val emoji: String, val icon: ImageVector) {
-    FOOD("food", "Food & dining", "\uD83C\uDF5B", Icons.Default.Fastfood),
-    FOOD_DELIVERY("food-delivery", "Food delivery", "\uD83D\uDEF5", Icons.Default.ShoppingBag),
-    GROCERIES("groceries", "Groceries", "\uD83D\uDED2", Icons.Default.LocalGroceryStore),
-    TRANSPORT("transport", "Transport", "\uD83D\uDE8C", Icons.Default.DirectionsBus),
-    SHOPPING("shopping", "Shopping", "\uD83D\uDECD\uFE0F", Icons.Default.Checkroom),
-    BILLS("bills", "Bills & recharge", "\uD83E\uDDFE", Icons.Default.ReceiptLong),
-    ENTERTAINMENT("entertainment", "Entertainment", "\uD83C\uDFAC", Icons.Default.Movie),
-    HEALTH("health", "Health", "\uD83E\uDE7A", Icons.Default.HealthAndSafety),
-    EDUCATION("education", "Education", "\uD83D\uDCDA", Icons.Default.School),
-    FAMILY("family", "Family & gifts", "\uD83C\uDF81", Icons.Default.CardGiftcard),
-    OTHER("other", "Other", "\uD83D\uDCA0", Icons.Default.MoreHoriz);
-
-    companion object {
-        fun fromKey(key: String): ExpenseCategory = entries.firstOrNull { it.key == key } ?: OTHER
-    }
-}
-
 enum class NotificationCategory(val label: String, val description: String, val defaultHour: Int?) {
     MORNING_PLANNING("Morning planning", "Plan your main goal for the day", 8),
     MIDDAY_FOCUS("Midday focus nudge", "A gentle check on your focus session", 13),

@@ -32,12 +32,16 @@ data class ReminderSettings(
     val privateMode: Boolean = false,
     val quietStart: Int? = 22,
     val quietEnd: Int? = 7,
-    /** category name -> hour (0-23); only categories with a time are scheduled */
+    /** category name -> hour (0-23); legacy */
     val times: Map<String, Int> = mapOf(
         "MORNING_PLANNING" to 8,
         "EVENING_CHECKIN" to 21,
         "EXPENSE_REMINDER" to 20,
     ),
+    /** category name -> minute of day (0 - 1439). Overrides times if present */
+    val timeMinutes: Map<String, Int> = emptyMap(),
+    /** categories that have been explicitly disabled by the user */
+    val disabledCategories: Set<String> = emptySet(),
 )
 
 @Serializable
@@ -59,10 +63,12 @@ data class CheckinDraft(
     val focus: Int? = null,
     val effort: Int? = null,
     val spent: String = "",
-    val saved: String = "",
+    val necessary: Boolean = true,
+    val earned: String = "",
     val avoided: String = "",
     val goalProgress: Map<String, Int> = emptyMap(),
     val goalMinutes: Map<String, Int> = emptyMap(),
+    val customAnswers: Map<String, String> = emptyMap(),
 )
 
 @Singleton

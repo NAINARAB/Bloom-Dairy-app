@@ -41,6 +41,11 @@ class RootViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val locked = MutableStateFlow(false)
+    val globalLoading = MutableStateFlow(false)
+
+    fun setLoading(isLoading: Boolean) {
+        globalLoading.value = isLoading
+    }
 
     init {
         // Lock the diary whenever the app leaves the foreground (if enabled).

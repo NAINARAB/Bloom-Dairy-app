@@ -2,7 +2,6 @@ package mobile.dairy.app.domain
 
 import mobile.dairy.app.core.Constants
 import mobile.dairy.app.core.Dates
-import mobile.dairy.app.core.ExpenseCategory
 import mobile.dairy.app.core.Format
 import mobile.dairy.app.core.Mood
 import mobile.dairy.app.domain.Insight
@@ -26,6 +25,7 @@ data class InsightContext(
     val today: String,
     val currency: String = "INR",
     val dailyBudget: Double? = null,
+    val prefs: AppPrefs = AppPrefs(),
     val entries: List<JournalEntry> = emptyList(),
     val ratings: List<DailyRating> = emptyList(),
     val goals: List<Goal> = emptyList(),
@@ -145,7 +145,7 @@ object InsightEngine {
         val spike = Finance.weekOverWeekByCategory(ctx.today, ctx.expenses)
             .firstOrNull { it.changePct >= 30 && it.current >= 100 }
         if (spike != null) {
-            val label = ExpenseCategory.fromKey(spike.category).label.lowercase()
+            val label = ctx.prefs.transactionCategories.find { it.key == spike.category }?.label?.lowercase() ?: "that category"
             out.add(mk(ctx.today, "money-trend", "\uD83D\uDCC8", "TrendingUp",
                 "Your $label spending is higher than last week. Worth a quick look \u2014 no judgement.", 50))
         }

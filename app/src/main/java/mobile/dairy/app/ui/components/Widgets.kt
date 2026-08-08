@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -64,6 +64,14 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SentimentSatisfied
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
@@ -98,6 +106,59 @@ private val INSIGHT_ICONS = mapOf(
     "Lightbulb" to Icons.Default.Lightbulb,
     "Link" to Icons.Default.Link
 )
+
+/* ------------------------------------------------------------------ */
+/* Global Loading Overlay                                               */
+/* ------------------------------------------------------------------ */
+
+@Composable
+fun GlobalLoadingOverlay(isLoading: Boolean) {
+    if (!isLoading) return
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "page_flip")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 180f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "page_flip_rotation"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .pointerInput(Unit) {}, // Consume taps
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(60.dp, 80.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(4.dp))) {
+                // Left page static
+                Box(Modifier.fillMaxHeight().width(30.dp).align(Alignment.CenterStart).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)).border(1.dp, MaterialTheme.colorScheme.outlineVariant))
+                // Right page static
+                Box(Modifier.fillMaxHeight().width(30.dp).align(Alignment.CenterEnd).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp)).border(1.dp, MaterialTheme.colorScheme.outlineVariant))
+                // Flipping page
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .width(30.dp)
+                        .align(Alignment.CenterEnd)
+                        .graphicsLayer {
+                            rotationY = -rotation
+                            transformOrigin = TransformOrigin(0f, 0.5f)
+                            cameraDistance = 8f * density
+                        }
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("Syncing...", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
 
 /* ------------------------------------------------------------------ */
 /* Cards + labels                                                      */
@@ -342,7 +403,6 @@ fun ChipRow(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WrapChips(content: @Composable () -> Unit) {
     FlowRow(
@@ -376,7 +436,7 @@ fun InsightCard(insight: Insight, onDismiss: (() -> Unit)? = null) {
 }
 
 @Composable
-fun StatCard(label: String, value: String, modifier: Modifier = Modifier, icon: ImageVector? = null, good: Boolean = false) {
+fun StatCard(label: String, value: String, modifier: Modifier = Modifier, icon: ImageVector? = null, good: Boolean = false, emphasize: Boolean = false) {
     BloomCard(modifier = modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Eyebrow(label)
@@ -386,7 +446,11 @@ fun StatCard(label: String, value: String, modifier: Modifier = Modifier, icon: 
         Text(
             value,
             style = MaterialTheme.typography.titleLarge,
-            color = if (good) BloomColors.success() else MaterialTheme.colorScheme.onSurface,
+            color = when {
+                good -> BloomColors.success()
+                emphasize -> BloomColors.warning()
+                else -> MaterialTheme.colorScheme.onSurface
+            },
             maxLines = 1,
         )
     }
@@ -463,15 +527,18 @@ fun Bars(bars: List<Bar>, max: Double? = null, height: Dp = 80.dp) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BloomTwoDatePickerDialog(
+fun GlobalFilterDialog(
     initialStartDate: String? = null,
     initialEndDate: String? = null,
+    initialQuickRange: String = "week", // "today", "week", "month", "custom"
     onDismiss: () -> Unit,
-    onRangeSelected: (String, String) -> Unit
+    onApply: (quickRange: String, start: String, end: String) -> Unit,
+    content: @Composable () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val today = remember { Dates.todayKey() }
     
+    var quickRange by remember { mutableStateOf(initialQuickRange) }
     var startDate by remember { mutableStateOf(initialStartDate ?: today) }
     var endDate by remember { mutableStateOf(initialEndDate ?: today) }
     
@@ -490,101 +557,115 @@ fun BloomTwoDatePickerDialog(
         Column(
             Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .padding(24.dp)
         ) {
-            Spacer(Modifier.height(12.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Date Filter", style = MaterialTheme.typography.titleLarge)
+                Text("Filters", style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Close")
                 }
             }
-            Text(
-                "Select Start and End dates to filter. Start date must be before or equal to End date.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // Start Date Input Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { pickingFor = "start" },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Row(
-                    Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("Start Date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(4.dp))
-                        Text(Dates.friendly(startDate), style = MaterialTheme.typography.titleMedium)
-                    }
-                    Button(onClick = { pickingFor = "start" }) {
-                        Text("Change")
-                    }
-                }
-            }
-
+            
             Spacer(Modifier.height(16.dp))
-
-            // End Date Input Card
-            Card(
-                modifier = Modifier
+            
+            content()
+            
+            Spacer(Modifier.height(16.dp))
+            SectionTitle("Date Range")
+            Spacer(Modifier.height(8.dp))
+            
+            Row(
+                Modifier
                     .fillMaxWidth()
-                    .clickable { pickingFor = "end" },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                    .padding(4.dp)
             ) {
-                Row(
-                    Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("End Date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(4.dp))
-                        Text(Dates.friendly(endDate), style = MaterialTheme.typography.titleMedium)
-                    }
-                    Button(onClick = { pickingFor = "end" }) {
-                        Text("Change")
+                listOf("today" to "Today", "week" to "7D", "month" to "30D", "custom" to "Custom").forEach { (key, label) ->
+                    val sel = quickRange == key
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .background(
+                                if (sel) MaterialTheme.colorScheme.surface else Color.Transparent,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { quickRange = key },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                            color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
+            
+            if (quickRange == "custom") {
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Start Date Input Card
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { pickingFor = "start" },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("Start Date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(4.dp))
+                            Text(Dates.friendly(startDate), style = MaterialTheme.typography.titleSmall)
+                        }
+                    }
+                    
+                    // End Date Input Card
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { pickingFor = "end" },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("End Date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(4.dp))
+                            Text(Dates.friendly(endDate), style = MaterialTheme.typography.titleSmall)
+                        }
+                    }
+                }
 
-            if (!isValid) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "⚠️ Start date ($startDate) cannot be after End date ($endDate).",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                if (!isValid) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "⚠️ Start date cannot be after End date.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
 
             Spacer(Modifier.height(28.dp))
 
             Button(
                 onClick = {
-                    if (isValid) {
-                        onRangeSelected(startDate, endDate)
+                    if (quickRange != "custom" || isValid) {
+                        onApply(quickRange, startDate, endDate)
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = isValid
+                enabled = quickRange != "custom" || isValid
             ) {
                 Text("Apply Filter", fontWeight = FontWeight.Bold)
             }
@@ -612,6 +693,134 @@ fun BloomTwoDatePickerDialog(
                         } else {
                             endDate = key
                         }
+                    }
+                    pickingFor = null
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pickingFor = null }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BloomTwoDatePickerDialog(
+    initialStartDate: String? = null,
+    initialEndDate: String? = null,
+    onDismiss: () -> Unit,
+    onRangeSelected: (String, String) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val today = remember { Dates.todayKey() }
+    
+    var startDate by remember { mutableStateOf(initialStartDate ?: today) }
+    var endDate by remember { mutableStateOf(initialEndDate ?: today) }
+    
+    var pickingFor by remember { mutableStateOf<String?>(null) } // "start" | "end" | null
+
+    val isValid = remember(startDate, endDate) {
+        startDate <= endDate
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Select Date Range", style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+            
+            Spacer(Modifier.height(24.dp))
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Card(
+                    modifier = Modifier.weight(1f).clickable { pickingFor = "start" },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("Start Date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(4.dp))
+                        Text(Dates.friendly(startDate), style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                
+                Card(
+                    modifier = Modifier.weight(1f).clickable { pickingFor = "end" },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("End Date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(4.dp))
+                        Text(Dates.friendly(endDate), style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+            }
+
+            if (!isValid) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "⚠️ Start date cannot be after End date.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            Button(
+                onClick = { onRangeSelected(startDate, endDate) },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = isValid
+            ) {
+                Text("Confirm Range", fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    if (pickingFor != null) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = runCatching {
+                val targetKey = if (pickingFor == "start") startDate else endDate
+                java.time.LocalDate.parse(targetKey).atStartOfDay(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+            }.getOrNull()
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { pickingFor = null },
+            confirmButton = {
+                Button(onClick = {
+                    val selMs = dateState.selectedDateMillis
+                    if (selMs != null) {
+                        val key = Dates.fromMillis(selMs)
+                        if (pickingFor == "start") startDate = key else endDate = key
                     }
                     pickingFor = null
                 }) {

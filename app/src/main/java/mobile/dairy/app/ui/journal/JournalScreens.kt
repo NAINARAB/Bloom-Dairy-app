@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Done
@@ -36,6 +38,9 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -77,9 +82,13 @@ import mobile.dairy.app.ui.components.MoodPicker
 import mobile.dairy.app.ui.components.SectionTitle
 import mobile.dairy.app.ui.components.WrapChips
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -89,8 +98,30 @@ class JournalViewModel @Inject constructor(
     private val entryRepo: EntryRepository,
 ) : ViewModel() {
 
-    val entries = entryRepo.entries(365)
+    val searchQuery = MutableStateFlow("")
+    private val dateRange = MutableStateFlow<Pair<String?, String?>>(Dates.addDays(Dates.todayKey(), -7) to Dates.todayKey())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val entries = combine(searchQuery, dateRange) { q, range -> Pair(q, range) }
+        .flatMapLatest { (q, range) -> 
+            if (q.isNotBlank()) {
+                entryRepo.entries(null, null)
+            } else {
+                entryRepo.entries(range.first, range.second)
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val ratings = entryRepo.ratings(90)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun updateFilter(start: String?, end: String?) {
+        dateRange.value = start to end
+    }
+
+    fun updateSearch(q: String) {
+        searchQuery.value = q
+    }
 
     fun toggleFavorite(entry: JournalEntry) {
         viewModelScope.launch { runCatching { entryRepo.setFlag(entry.date, "favorite", !entry.favorite) } }
@@ -110,13 +141,15 @@ fun JournalScreen(nav: NavController) {
 @Composable
 fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: JournalViewModel = hiltViewModel()) {
     val entries by vm.entries.collectAsState()
+    val ratings by vm.ratings.collectAsState()
+    val ratingsMap = remember(ratings) { ratings.associateBy { it.date } }
 
     var query by rememberSaveable { mutableStateOf("") }
     var moodFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var startDate by rememberSaveable { mutableStateOf<String?>(null) }
     var endDate by rememberSaveable { mutableStateOf<String?>(null) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
     
     // Quick Range state
     var quickRange by rememberSaveable { mutableStateOf("all") } // all | week | month | custom
@@ -132,19 +165,6 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
         if (moodFilter != null && !e.moods.contains(moodFilter)) return@filter false
         if (favoritesOnly && !e.favorite) return@filter false
         
-        // Date range logic
-        val today = Dates.todayKey()
-        val effectiveStart = when(quickRange) {
-            "week" -> Dates.addDays(today, -7)
-            "month" -> Dates.addDays(today, -30)
-            "custom" -> startDate
-            else -> null
-        }
-        val effectiveEnd = if (quickRange == "custom") endDate else today
-        
-        if (effectiveStart != null && e.date < effectiveStart) return@filter false
-        if (effectiveEnd != null && e.date > effectiveEnd) return@filter false
-
         // Field-specific logic
         if (filterMistakes && e.mistakes.isNullOrBlank()) return@filter false
         if (filterLessons && e.lessons.isNullOrBlank()) return@filter false
@@ -162,77 +182,30 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
 
     val grouped = filtered.groupBy { Dates.startOfMonth(it.date) }.toSortedMap(compareByDescending { it })
 
-    if (showDatePicker) {
-        mobile.dairy.app.ui.components.BloomTwoDatePickerDialog(
+    if (showFilterDialog) {
+        mobile.dairy.app.ui.components.GlobalFilterDialog(
             initialStartDate = startDate,
             initialEndDate = endDate,
-            onDismiss = { 
-                showDatePicker = false 
-                if (startDate == null) quickRange = "all"
-            },
-            onRangeSelected = { start, end ->
+            initialQuickRange = quickRange,
+            onDismiss = { showFilterDialog = false },
+            onApply = { range, start, end ->
+                quickRange = range
                 startDate = start
                 endDate = end
-                quickRange = "custom"
-                showDatePicker = false
-            }
-        )
-    }
-
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        item {
-            Spacer(Modifier.height(16.dp))
-            Text("Journal", style = MaterialTheme.typography.displaySmall)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = query, onValueChange = { query = it },
-                placeholder = { Text("Search people, tags, notes, memories…") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-            Spacer(Modifier.height(16.dp))
-            
-            // Date Presets
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                    .padding(4.dp)
-            ) {
-                listOf("all" to "All", "week" to "7d", "month" to "30d", "custom" to "Custom").forEach { (key, label) ->
-                    val sel = quickRange == key
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(36.dp)
-                            .background(
-                                if (sel) MaterialTheme.colorScheme.surface else Color.Transparent,
-                                RoundedCornerShape(10.dp)
-                            )
-                            .clickable { 
-                                quickRange = key
-                                if (key == "custom") showDatePicker = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                            color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                showFilterDialog = false
+                
+                val effectiveStart = when(range) {
+                    "today" -> Dates.todayKey()
+                    "week" -> Dates.addDays(Dates.todayKey(), -7)
+                    "month" -> Dates.addDays(Dates.todayKey(), -30)
+                    "custom" -> start
+                    else -> null
                 }
+                val effectiveEnd = if (range == "custom") end else Dates.todayKey()
+                vm.updateFilter(effectiveStart, effectiveEnd)
             }
-            
-            Spacer(Modifier.height(12.dp))
-            
-            WrapChips {
+        ) {
+            mobile.dairy.app.ui.components.WrapChips {
                 FilterChip(
                     selected = favoritesOnly,
                     onClick = { favoritesOnly = !favoritesOnly },
@@ -261,7 +234,7 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
                     label = { Text("Gratitude") }
                 )
                 
-                Mood.entries.forEach { m ->
+                mobile.dairy.app.core.Mood.entries.forEach { m ->
                     FilterChip(
                         selected = moodFilter == m.key,
                         onClick = { moodFilter = if (moodFilter == m.key) null else m.key },
@@ -269,13 +242,51 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
                     )
                 }
             }
+        }
+    }
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        item {
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Journal", style = MaterialTheme.typography.displaySmall)
+                androidx.compose.material3.Button(
+                    onClick = { nav.navigate(Routes.CHECK_IN) },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("+ New", fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = query, onValueChange = { 
+                        query = it
+                        vm.updateSearch(it)
+                    },
+                    placeholder = { Text("Search people, tags, notes, memories…") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+                IconButton(
+                    onClick = { showFilterDialog = true },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                ) {
+                    Icon(Icons.Default.FilterList, contentDescription = "Filters", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             
-            if (quickRange == "custom" && startDate != null) {
+            if (quickRange == "custom" && startDate != null && query.isEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text("$startDate to $endDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(8.dp))
             }
-            
-            Spacer(Modifier.height(8.dp))
         }
         if (filtered.isEmpty()) {
             item {
@@ -292,8 +303,14 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
                 Spacer(Modifier.height(8.dp))
             }
             items(monthEntries.size) { i ->
-                EntryCard(monthEntries[i], onOpen = { nav.navigate(Routes.entry(monthEntries[i].date)) },
-                    onToggleFavorite = { vm.toggleFavorite(monthEntries[i]) })
+                val entry = monthEntries[i]
+                val rating = ratingsMap[entry.date]
+                EntryCard(
+                    entry = entry,
+                    rating = rating,
+                    onOpen = { nav.navigate(Routes.entry(entry.date)) },
+                    onToggleFavorite = { vm.toggleFavorite(entry) }
+                )
                 Spacer(Modifier.height(10.dp))
             }
         }
@@ -302,12 +319,19 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
 }
 
 @Composable
-private fun EntryCard(entry: JournalEntry, onOpen: () -> Unit, onToggleFavorite: () -> Unit) {
+private fun EntryCard(
+    entry: JournalEntry,
+    rating: mobile.dairy.app.domain.DailyRating?,
+    onOpen: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
     val snippet = entry.bestPart ?: entry.note ?: entry.dayReason ?: entry.hardestPart ?: ""
-    BloomCard(onClick = onOpen) {
+    BloomCard(
+        onClick = onOpen
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {
-            Text(Dates.friendly(entry.date), style = MaterialTheme.typography.titleMedium)
+            Text(Dates.friendly(entry.date), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (entry.important) {
                     Icon(
@@ -325,19 +349,84 @@ private fun EntryCard(entry: JournalEntry, onOpen: () -> Unit, onToggleFavorite:
                         tint = if (entry.favorite) Color(0xFFE8B34B) else MaterialTheme.colorScheme.outline
                     )
                 }
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         MoodEmojiRow(entry.moods)
+        
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        
         if (snippet.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(snippet, style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+            Spacer(Modifier.height(4.dp))
+            Text(snippet, style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 3)
         }
+        
+        if (rating != null) {
+            Spacer(Modifier.height(12.dp))
+            WrapChips {
+                rating.overall?.let { 
+                    Box(Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
+                        Text("Overall: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) 
+                    } 
+                }
+                rating.happiness?.let { 
+                    Box(Modifier.background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
+                        Text("Happiness: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary) 
+                    } 
+                }
+                rating.energy?.let { 
+                    Box(Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
+                        Text("Energy: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) 
+                    } 
+                }
+                rating.sleep?.let { 
+                    Box(Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
+                        Text("Sleep: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) 
+                    } 
+                }
+            }
+        }
+
+        if (entry.gratitude.isNotEmpty() || entry.people.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (entry.people.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(4.dp))
+                        Text(entry.people.joinToString(", ") { it.name }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+                if (entry.gratitude.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(4.dp))
+                        Text(entry.gratitude.first(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+            }
+        }
+
         if (entry.tags.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            Text(entry.tags.joinToString("  ") { "#$it" }, style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Spacer(Modifier.height(12.dp))
+            WrapChips {
+                entry.tags.forEach { t ->
+                    Box(
+                        Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text("#$t", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
     }
 }
@@ -356,6 +445,10 @@ class EntryEditorViewModel @Inject constructor(
     val busy = MutableStateFlow(false)
     val error = MutableStateFlow<String?>(null)
     val saved = MutableStateFlow(false)
+
+    val recentPeople = entryRepo.entries(30)
+        .map { entries -> entries.flatMap { it.people }.distinctBy { it.name }.take(8) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun load(date: String) {
         if (ready.value) return
@@ -403,6 +496,7 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
     val saved by vm.saved.collectAsState()
     val busy by vm.busy.collectAsState()
     val error by vm.error.collectAsState()
+    val recentPeople by vm.recentPeople.collectAsState()
     if (saved) {
         LaunchedEffect(Unit) { nav.popBackStack() }
         return
@@ -412,7 +506,6 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
     var entry by remember { mutableStateOf(loaded!!) }
 
     Scaffold(
-        modifier = Modifier.statusBarsPadding(),
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(Dates.friendly(date), style = MaterialTheme.typography.titleMedium) },
@@ -484,7 +577,7 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
             Editor("Improvement for tomorrow", entry.improvement ?: "") { entry = entry.copy(improvement = it.ifBlank { null }) }
 
             SectionTitle("People")
-            PeopleFeelingPicker(entry.people) { entry = entry.copy(people = it) }
+            PeopleFeelingPicker(entry.people, recentPeople) { entry = entry.copy(people = it) }
 
             SectionTitle("Gratitude")
             if (error != null) {
