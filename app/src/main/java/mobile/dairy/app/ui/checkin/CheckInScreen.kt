@@ -1,6 +1,7 @@
 package mobile.dairy.app.ui.checkin
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -62,6 +62,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberDatePickerState
 import mobile.dairy.app.core.Constants
 import mobile.dairy.app.core.Dates
 import mobile.dairy.app.data.EntryRepository
@@ -355,6 +360,7 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
             userScrollEnabled = false,
         ) { page ->
             val q = activeQuestions[page]
+            val isCurrentPage = pager.currentPage == page
             Column(
                 Modifier
                     .fillMaxSize()
@@ -380,7 +386,7 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                 }
                 Spacer(Modifier.height(48.dp))
 
-                StepContent(q, draft, goals, recentPeople, vm::patch)
+                StepContent(q, draft, goals, recentPeople, vm::patch, isCurrentPage)
             }
         }
     }
@@ -395,12 +401,13 @@ private fun StepContent(
     goals: List<Goal>,
     recentPeople: List<PersonRef>,
     patch: ((CheckinDraft) -> CheckinDraft) -> Unit,
+    isCurrentPage: Boolean = false,
 ) {
     if (q.isCustom) {
         val currentValue = draft.customAnswers[q.id] ?: ""
         when (q.type) {
-            "text" -> NoteField(currentValue, "Enter your answer...", minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
-            "number" -> NoteField(currentValue, "0", numeric = true, single = true) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "text" -> NoteField(currentValue, "Enter your answer...", minLines = 3, autoFocus = isCurrentPage) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "number" -> NoteField(currentValue, "0", numeric = true, single = true, autoFocus = isCurrentPage) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
             "slider" -> RatingScale(q.title, Icons.Default.AutoAwesome, currentValue.toIntOrNull() ?: 5) { n -> patch { it.copy(customAnswers = it.customAnswers + (q.id to n.toString())) } }
             "toggle" -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -422,7 +429,8 @@ private fun StepContent(
                     }
                 }
             }
-            else -> NoteField(currentValue, "...", minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "date" -> DatePickerField(currentValue, "Select date") { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            else -> NoteField(currentValue, "...", minLines = 3, autoFocus = isCurrentPage) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
         }
         return
     }
@@ -456,23 +464,23 @@ private fun StepContent(
             }
         }
 
-        "q_best_part" -> NoteField(draft.bestPart, "A moment worth remembering…") { v ->
+        "q_best_part" -> NoteField(draft.bestPart, "A moment worth remembering…", autoFocus = isCurrentPage) { v ->
             patch { it.copy(bestPart = v) }
         }
 
-        "q_hardest_part" -> NoteField(draft.hardestPart, "What was heavy today…") { v ->
+        "q_hardest_part" -> NoteField(draft.hardestPart, "What was heavy today…", autoFocus = isCurrentPage) { v ->
             patch { it.copy(hardestPart = v) }
         }
 
-        "q_good_things" -> NoteField(draft.goodThings, "Something you did well or something good that happened...") { v ->
+        "q_good_things" -> NoteField(draft.goodThings, "Something you did well or something good that happened...", autoFocus = isCurrentPage) { v ->
             patch { it.copy(goodThings = v) }
         }
 
-        "q_mistakes" -> NoteField(draft.mistakes, "It's okay to be honest with yourself...") { v ->
+        "q_mistakes" -> NoteField(draft.mistakes, "It's okay to be honest with yourself...", autoFocus = isCurrentPage) { v ->
             patch { it.copy(mistakes = v) }
         }
 
-        "q_lessons" -> NoteField(draft.lessons, "What's the takeaway from today?") { v ->
+        "q_lessons" -> NoteField(draft.lessons, "What's the takeaway from today?", autoFocus = isCurrentPage) { v ->
             patch { it.copy(lessons = v) }
         }
 
@@ -500,7 +508,7 @@ private fun StepContent(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            NoteField(draft.goodDecision, "Or write your own…", single = true) { v ->
+            NoteField(draft.goodDecision, "Or write your own…", single = true, autoFocus = isCurrentPage) { v ->
                 patch { it.copy(goodDecision = v) }
             }
         }
@@ -513,7 +521,7 @@ private fun StepContent(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            NoteField(draft.improvement, "One small thing…", single = true) { v ->
+            NoteField(draft.improvement, "One small thing…", single = true, autoFocus = isCurrentPage) { v ->
                 patch { it.copy(improvement = v) }
             }
         }
@@ -523,7 +531,7 @@ private fun StepContent(
             RatingScale("Focus", Icons.Default.FilterCenterFocus, draft.focus) { n -> patch { it.copy(focus = n) } }
         }
 
-        "q_anything_else" -> NoteField(draft.note, "Dear diary…", minLines = 5) { v ->
+        "q_anything_else" -> NoteField(draft.note, "Dear diary…", minLines = 5, autoFocus = isCurrentPage) { v ->
             patch { it.copy(note = v) }
         }
     }
@@ -541,7 +549,7 @@ private fun NoteField(
 ) {
     val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(autoFocus) {
         if (autoFocus) {
             kotlinx.coroutines.delay(150)
             runCatching { focusRequester.requestFocus() }
@@ -550,7 +558,7 @@ private fun NoteField(
 
     OutlinedTextField(
         value = value,
-        onValueChange = onChange,
+        onValueChange = { if (it.length <= 1500) onChange(it) },
         placeholder = { Text(placeholder) },
         modifier = Modifier
             .fillMaxWidth()
@@ -558,11 +566,60 @@ private fun NoteField(
         singleLine = single,
         minLines = if (single) 1 else minLines,
         keyboardOptions = if (numeric) {
-            KeyboardOptions(keyboardType = KeyboardType.Number)
+            KeyboardOptions(keyboardType = KeyboardType.Decimal)
         } else {
             KeyboardOptions.Default
         },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerField(
+    value: String,
+    placeholder: String,
+    onChange: (String) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    
+    Box {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            placeholder = { Text(placeholder) },
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+            }
+        )
+        Box(modifier = Modifier.matchParentSize().clickable { showDialog = true })
+    }
+
+    if (showDialog) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = if (value.isNotBlank()) {
+                runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(value)?.time }.getOrNull()
+            } else null
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { millis ->
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        onChange(sdf.format(java.util.Date(millis)))
+                    }
+                    showDialog = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
 }
 
 @Composable

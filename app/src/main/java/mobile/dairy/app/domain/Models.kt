@@ -174,6 +174,7 @@ data class Insight(
 data class AppPrefs(
     var theme: String = "system",        // system | light | dark
     var accent: String = "violet",       // violet | teal | rose | amber | sky
+    var cardGradient: String = "midnight", // midnight | sunset | ocean | aurora | forest | berry | ember | royal
     var currency: String = "INR",
     var dailyBudget: Double? = null,
     var lockEnabled: Boolean = false,

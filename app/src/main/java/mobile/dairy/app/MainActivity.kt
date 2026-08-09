@@ -68,6 +68,7 @@ object Routes {
     const val GOALS = "goals"
     const val MONEY = "money"
     const val INSIGHTS = "insights"
+    const val INSIGHTS_JOURNAL = "insights/journal"
     const val SCREEN_TIME = "screen-time"
     const val CHECK_IN = "check-in"
     const val NEW_GOAL = "goal/new"
@@ -137,6 +138,7 @@ fun BloomNavHost() {
         composable(Routes.SETTINGS_CATEGORIES) { mobile.dairy.app.ui.settings.CategorySettingsScreen(nav) }
         composable(Routes.SETTINGS_JOURNAL) { mobile.dairy.app.ui.settings.JournalSettingsScreen(nav) }
         composable(Routes.SETTINGS_PRIVACY) { mobile.dairy.app.ui.settings.PrivacySettingsScreen(nav) }
+        composable(Routes.INSIGHTS_JOURNAL) { mobile.dairy.app.ui.insights.reports.JournalReportsScreen(nav) }
     }
 }
 

@@ -11,11 +11,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.CrisisAlert
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -103,194 +107,101 @@ fun InsightsScreen(nav: NavController) {
 fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: InsightsViewModel = hiltViewModel()) {
     val ctx by vm.ctx.collectAsState()
 
-    var range by remember { mutableStateOf("30d") } // 7d | 30d | custom
-    var showDatePicker by remember { mutableStateOf(false) }
-    var customStart by remember { mutableStateOf<String?>(null) }
-    var customEnd by remember { mutableStateOf<String?>(null) }
-
-    if (showDatePicker) {
-        mobile.dairy.app.ui.components.BloomTwoDatePickerDialog(
-            initialStartDate = customStart,
-            initialEndDate = customEnd,
-            onDismiss = { showDatePicker = false },
-            onRangeSelected = { start, end ->
-                customStart = start
-                customEnd = end
-                showDatePicker = false
-            }
-        )
-    }
-
     Column(
         modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
     ) {
-        val today = ctx.today
-        val entryByDate = ctx.entries.associateBy { it.date }
-
         Spacer(Modifier.height(28.dp))
         Text("Insights", style = MaterialTheme.typography.displaySmall)
         Spacer(Modifier.height(16.dp))
 
-        // Range Selector
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                .padding(4.dp)
-        ) {
-            listOf("7d" to "7 days", "30d" to "30 days", "custom" to "Custom").forEach { (r, label) ->
-                val sel = range == r
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .background(if (sel) MaterialTheme.colorScheme.surface else Color.Transparent, RoundedCornerShape(10.dp))
-                        .clickable { 
-                            range = r
-                            if (r == "custom") showDatePicker = true
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(label, style = MaterialTheme.typography.labelSmall, color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+        // 1. Strava-Style Consistency Heatmap
+        mobile.dairy.app.ui.insights.components.ConsistencyCalendar(
+            ctx = ctx,
+            onDayClick = { date ->
+                // TODO: Show summary bottom sheet for the day
             }
-        }
-
-        val rangeEnd = if (range == "custom") (customEnd ?: today) else today
-        val rangeStart = when (range) {
-            "7d" -> Dates.addDays(today, -6)
-            "30d" -> Dates.addDays(today, -29)
-            else -> customStart ?: Dates.addDays(today, -29)
-        }
-
-        if (range == "custom" && customStart != null) {
-            Spacer(Modifier.height(8.dp))
-            Text("$customStart to $customEnd", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-        }
-
+        )
+        
         Spacer(Modifier.height(24.dp))
-
-        // Personal Motivation Assistant Daily Encouragements
-        val dailyInsights = remember(ctx) { InsightEngine.generateDailyInsights(ctx) }
-        if (dailyInsights.isNotEmpty()) {
-            SectionTitle("Personal Motivation Assistant")
-            dailyInsights.forEach { insight ->
-                mobile.dairy.app.ui.components.InsightCard(insight = insight)
+        
+        // 2. The App Drawer Style Reports
+        SectionTitle("Reports")
+        
+        // Grid of report icons
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.height(400.dp),
+            userScrollEnabled = false
+        ) {
+            item {
+                AppDrawerItem(
+                    icon = Icons.Default.Book,
+                    label = "Journal & Mood",
+                    onClick = { nav.navigate(Routes.INSIGHTS_JOURNAL) }
+                )
             }
-            Spacer(Modifier.height(16.dp))
+            item {
+                AppDrawerItem(
+                    icon = Icons.Default.CrisisAlert,
+                    label = "Goals & Tasks",
+                    onClick = { /* nav.navigate(Routes.INSIGHTS_GOALS) */ }
+                )
+            }
+            item {
+                AppDrawerItem(
+                    icon = Icons.Default.AttachMoney,
+                    label = "Money & Savings",
+                    onClick = { /* nav.navigate(Routes.INSIGHTS_FINANCE) */ }
+                )
+            }
+            item {
+                AppDrawerItem(
+                    icon = Icons.Default.BarChart,
+                    label = "Holistic Data",
+                    onClick = { /* nav.navigate(Routes.INSIGHTS_HOLISTIC) */ }
+                )
+            }
         }
+        
+        Spacer(Modifier.height(32.dp))
+    }
+}
 
-        if (ctx.entries.isEmpty()) {
-            EmptyState(
-                Icons.Default.BarChart, "Waiting for data",
-                "Bloom needs a few check-ins to start seeing patterns in your mood, money, and goals."
+@Composable
+fun AppDrawerItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Icon(
+                icon,
+                contentDescription = label,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
-        } else {
-            // Weekly Reflection Summary
-            SectionTitle("Weekly Reflection & Growth")
-            val summary = remember(ctx, rangeStart, rangeEnd) {
-                InsightEngine.generateWeeklySummary(ctx, rangeStart, rangeEnd)
-            }
-            BloomCard {
-                Text(summary.message, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
-                        Eyebrow("Check-ins")
-                        Text("${summary.checkins} logged", style = MaterialTheme.typography.bodyLarge)
-                    }
-                    Column {
-                        Eyebrow("Goal Focus")
-                        Text("${summary.goalMinutes} mins", style = MaterialTheme.typography.bodyLarge)
-                    }
-                    Column {
-                        Eyebrow("Avg Rating")
-                        Text(summary.avgOverall?.let { "%.1f/10".format(it) } ?: "–", style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Mood Trend
-            SectionTitle("Mood trend")
-            BloomCard {
-                val daysCount = (Dates.daysBetween(rangeStart, rangeEnd) + 1).toInt()
-                val bars = (0 until daysCount).map { i ->
-                    val d = Dates.addDays(rangeStart, i.toLong())
-                    val e = entryByDate[d]
-                    val v = e?.moods?.let { Mood.valenceOf(it) }
-                    Bar(
-                        label = if (daysCount <= 14) Dates.friendly(d).take(3) else "",
-                        value = v?.let { (it + 1) / 2 },
-                        color = v?.let { if (it >= 0) BloomColors.success() else BloomColors.warning() }
-                    )
-                }
-                Bars(bars, max = 1.0, height = 120.dp)
-                if (range == "custom") {
-                    Spacer(Modifier.height(8.dp))
-                    Text("$rangeStart to $rangeEnd", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Productivity & Focus
-            val filteredRatings = ctx.ratings.filter { it.date in rangeStart..rangeEnd }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f)) {
-                    SectionTitle("Avg Focus")
-                    val avgFocus = filteredRatings.mapNotNull { it.focus }.takeIf { it.isNotEmpty() }?.average()
-                    StatCard("", "${avgFocus?.let { "%.1f".format(it) } ?: "–"}/10", Modifier.fillMaxWidth())
-                }
-                Column(Modifier.weight(1f)) {
-                    SectionTitle("Goal Effort")
-                    val avgEffort = filteredRatings.mapNotNull { it.goalEffort }.takeIf { it.isNotEmpty() }?.average()
-                    StatCard("", "${avgEffort?.let { "%.1f".format(it) } ?: "–"}/10", Modifier.fillMaxWidth(), good = true)
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Influencers
-            val filteredEntries = ctx.entries.filter { it.date in rangeStart..rangeEnd }
-            val (pos, neg) = InsightEngine.moodInfluencers(filteredEntries)
-            if (pos.isNotEmpty() || neg.isNotEmpty()) {
-                SectionTitle("What affects your mood")
-                BloomCard {
-                    if (pos.isNotEmpty()) {
-                        Eyebrow("Boosts mood")
-                        Spacer(Modifier.height(8.dp))
-                        WrapChips {
-                            pos.take(5).forEach { inf ->
-                                FilterChip(selected = true, onClick = {}, label = { Text(inf.name) })
-                            }
-                        }
-                    }
-                    if (neg.isNotEmpty()) {
-                        if (pos.isNotEmpty()) Spacer(Modifier.height(16.dp))
-                        Eyebrow("Brings mood down")
-                        Spacer(Modifier.height(8.dp))
-                        WrapChips {
-                            neg.take(5).forEach { inf ->
-                                FilterChip(selected = false, onClick = {}, label = { Text(inf.name) },
-                                    colors = FilterChipDefaults.filterChipColors(labelColor = MaterialTheme.colorScheme.error))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(48.dp))
-            Text(
-                "Disclaimer: " + Constants.WELLBEING_DISCLAIMER,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(32.dp))
         }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 2
+        )
     }
 }

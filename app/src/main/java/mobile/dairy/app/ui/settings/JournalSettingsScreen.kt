@@ -32,6 +32,8 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -267,6 +269,7 @@ fun QuestionItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddQuestionDialog(onDismiss: () -> Unit, onAdd: (title: String, type: String, options: List<String>) -> Unit) {
     var title by remember { mutableStateOf("") }
@@ -296,15 +299,23 @@ fun AddQuestionDialog(onDismiss: () -> Unit, onAdd: (title: String, type: String
                 )
                 Spacer(Modifier.height(16.dp))
 
-                Box {
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = !expanded }
+                ) {
                     OutlinedTextField(
                         value = types.find { it.first == type }?.second ?: "",
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Input Type") },
-                        modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
                         types.forEach { (key, label) ->
                             DropdownMenuItem(
                                 text = { Text(label) },

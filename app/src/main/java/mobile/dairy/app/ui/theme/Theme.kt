@@ -34,6 +34,19 @@ val ACCENTS: Map<String, Accent> = mapOf(
     "sky" to Accent(Color(0xFF3D7BC4), Color(0xFF6BA3E0), "Open sky"),
 )
 
+data class GradientScheme(val light: List<Color>, val dark: List<Color>, val label: String)
+
+val GRADIENTS: Map<String, GradientScheme> = mapOf(
+    "midnight" to GradientScheme(listOf(Color(0xFF533483), Color(0xFF16213E)), listOf(Color(0xFF2B1B4D), Color(0xFF0B1120)), "Midnight"),
+    "sunset" to GradientScheme(listOf(Color(0xFFFF7E5F), Color(0xFFFEB47B)), listOf(Color(0xFFB34233), Color(0xFFB57042)), "Sunset"),
+    "ocean" to GradientScheme(listOf(Color(0xFF2B5876), Color(0xFF4E4376)), listOf(Color(0xFF112635), Color(0xFF261F3B)), "Ocean"),
+    "aurora" to GradientScheme(listOf(Color(0xFF00B4DB), Color(0xFF0083B0)), listOf(Color(0xFF00586B), Color(0xFF003C52)), "Aurora"),
+    "forest" to GradientScheme(listOf(Color(0xFF1D976C), Color(0xFF93F9B9)), listOf(Color(0xFF0E4C36), Color(0xFF457958)), "Forest"),
+    "berry" to GradientScheme(listOf(Color(0xFFB224EF), Color(0xFF7579FF)), listOf(Color(0xFF561175), Color(0xFF393B7D)), "Berry"),
+    "ember" to GradientScheme(listOf(Color(0xFFF12711), Color(0xFFF5AF19)), listOf(Color(0xFF751207), Color(0xFF78550B)), "Ember"),
+    "royal" to GradientScheme(listOf(Color(0xFF141E30), Color(0xFF243B55)), listOf(Color(0xFF0A0F18), Color(0xFF101B28)), "Royal")
+)
+
 // Semantic extras that Material3's scheme doesn't carry
 object BloomColors {
     val successLight = Color(0xFF3E9D6E)

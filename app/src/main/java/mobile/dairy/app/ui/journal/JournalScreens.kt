@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -41,12 +43,24 @@ import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.getValue
@@ -54,6 +68,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
@@ -96,7 +111,10 @@ import javax.inject.Inject
 @HiltViewModel
 class JournalViewModel @Inject constructor(
     private val entryRepo: EntryRepository,
+    private val prefsRepo: mobile.dairy.app.data.PrefsRepository,
 ) : ViewModel() {
+
+    val appPrefs = prefsRepo.appPrefs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), mobile.dairy.app.domain.AppPrefs())
 
     val searchQuery = MutableStateFlow("")
     private val dateRange = MutableStateFlow<Pair<String?, String?>>(Dates.addDays(Dates.todayKey(), -7) to Dates.todayKey())
@@ -143,6 +161,9 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
     val entries by vm.entries.collectAsState()
     val ratings by vm.ratings.collectAsState()
     val ratingsMap = remember(ratings) { ratings.associateBy { it.date } }
+    
+    val appPrefsState by vm.appPrefs.collectAsState()
+    val journalQuestions = appPrefsState.journalQuestions
 
     var query by rememberSaveable { mutableStateOf("") }
     var moodFilter by rememberSaveable { mutableStateOf<String?>(null) }
@@ -308,6 +329,8 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
                 EntryCard(
                     entry = entry,
                     rating = rating,
+                    questions = journalQuestions,
+                    gradientKey = appPrefsState.cardGradient,
                     onOpen = { nav.navigate(Routes.entry(entry.date)) },
                     onToggleFavorite = { vm.toggleFavorite(entry) }
                 )
@@ -322,16 +345,23 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
 private fun EntryCard(
     entry: JournalEntry,
     rating: mobile.dairy.app.domain.DailyRating?,
+    questions: List<mobile.dairy.app.domain.JournalQuestionDef>,
+    gradientKey: String,
     onOpen: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
-    val snippet = entry.bestPart ?: entry.note ?: entry.dayReason ?: entry.hardestPart ?: ""
-    BloomCard(
-        onClick = onOpen
+    val gradientColors = mobile.dairy.app.ui.theme.GRADIENTS[gradientKey]?.let { 
+        if (androidx.compose.foundation.isSystemInDarkTheme()) it.dark else it.light 
+    } ?: listOf(Color(0xFF533483), Color(0xFF16213E)) // Fallback to Midnight
+
+    mobile.dairy.app.ui.components.GradientCard(
+        onClick = onOpen,
+        gradientColors = gradientColors
     ) {
+        // --- TOP ROW: Date & Favorite/Pin Icons ---
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {
-            Text(Dates.friendly(entry.date), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+            Text(Dates.friendly(entry.date), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (entry.important) {
                     Icon(
@@ -358,66 +388,149 @@ private fun EntryCard(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        MoodEmojiRow(entry.moods)
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        
-        if (snippet.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(snippet, style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface, maxLines = 3)
-        }
-        
-        if (rating != null) {
-            Spacer(Modifier.height(12.dp))
-            WrapChips {
-                rating.overall?.let { 
-                    Box(Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
-                        Text("Overall: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) 
-                    } 
-                }
-                rating.happiness?.let { 
-                    Box(Modifier.background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
-                        Text("Happiness: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary) 
-                    } 
-                }
-                rating.energy?.let { 
-                    Box(Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
-                        Text("Energy: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) 
-                    } 
-                }
-                rating.sleep?.let { 
-                    Box(Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) { 
-                        Text("Sleep: $it/10", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) 
-                    } 
+        Spacer(Modifier.height(16.dp))
+
+        // --- SECOND ROW: HUGE EMOJI & CIRCULAR RATINGS ---
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val primaryMood = entry.moods.firstOrNull()?.let { mobile.dairy.app.core.Mood.fromKey(it) }
+            Text(
+                text = primaryMood?.emoji ?: "📓",
+                fontSize = 56.sp,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+            
+            // Gather numeric values for circular ratings
+            val circularRatings = mutableListOf<Pair<String, Int>>()
+            rating?.overall?.let { circularRatings.add("Overall" to it) }
+            rating?.focus?.let { circularRatings.add("Focus" to it) }
+            
+            questions.forEach { q ->
+                if (q.type == "slider") {
+                    val value = entry.customAnswers[q.id]?.toIntOrNull()
+                    if (value != null) circularRatings.add(q.title to value)
                 }
             }
-        }
-
-        if (entry.gratitude.isNotEmpty() || entry.people.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (entry.people.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(4.dp))
-                        Text(entry.people.joinToString(", ") { it.name }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                    }
-                }
-                if (entry.gratitude.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(4.dp))
-                        Text(entry.gratitude.first(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            
+            if (circularRatings.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(circularRatings) { (label, value) ->
+                        mobile.dairy.app.ui.components.CircularRatingIndicator(
+                            value = value,
+                            label = label.take(12),
+                            gradientColors = gradientColors
+                        )
                     }
                 }
             }
         }
+        
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
+        // --- MIDDLE SECTION: TEXT/LIST QUESTIONS ---
+        Column(Modifier.fillMaxWidth()) {
+            questions.filter { it.type == "text" || it.type == "person" || it.type == "emoji" }.forEach { q ->
+                val answerString: String? = when (q.id) {
+                    "q_feeling" -> null
+                    "q_feeling_reason" -> if (entry.moodCauses.isNotEmpty()) entry.moodCauses.joinToString(", ") else null
+                    "q_people" -> if (entry.people.isNotEmpty()) entry.people.joinToString(", ") { it.name } else null
+                    "q_best_part" -> entry.bestPart
+                    "q_hardest_part" -> entry.hardestPart
+                    "q_good_things" -> entry.goodThings
+                    "q_mistakes" -> entry.mistakes
+                    "q_lessons" -> entry.lessons
+                    "q_gratitude" -> if (entry.gratitude.isNotEmpty()) entry.gratitude.joinToString(", ") else null
+                    "q_good_decision" -> entry.goodDecision
+                    "q_improve_tomorrow" -> entry.improvement
+                    "q_anything_else" -> entry.note
+                    else -> if (q.isCustom && q.type == "text") entry.customAnswers[q.id] else null
+                }
+                
+                val shouldShow = !answerString.isNullOrBlank() || q.isActive
+                
+                if (shouldShow && q.id != "q_feeling") {
+                    val icon = when (q.id) {
+                        "q_people" -> Icons.Default.Group
+                        "q_feeling_reason" -> Icons.Default.Psychology
+                        "q_best_part", "q_good_things" -> Icons.Default.Favorite
+                        "q_hardest_part", "q_mistakes" -> Icons.Default.ErrorOutline
+                        "q_lessons" -> Icons.Default.Lightbulb
+                        "q_good_decision", "q_improve_tomorrow" -> Icons.Default.CheckCircleOutline
+                        "q_anything_else" -> Icons.Default.ChatBubbleOutline
+                        else -> Icons.Default.ChatBubbleOutline
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min).padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        // Left column
+                        Row(Modifier.weight(0.40f), verticalAlignment = Alignment.Top) {
+                            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp).padding(end = 6.dp), tint = gradientColors.first())
+                            Text(
+                                text = q.title,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        // Separator
+                        androidx.compose.material3.VerticalDivider(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        
+                        // Right column
+                        if (!answerString.isNullOrBlank()) {
+                            Text(
+                                text = answerString,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(0.60f),
+                                maxLines = 3,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text("", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.60f))
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                }
+            }
+        }
+        
+        Spacer(Modifier.height(16.dp))
+
+        // --- BOTTOM SECTION: METADATA GRID ---
+        val metadataList = mutableListOf<Pair<String, String>>()
+        questions.filter { it.type == "date" || it.type == "toggle" || it.type == "dropdown" || it.type == "number" }.forEach { q ->
+            val value = entry.customAnswers[q.id]
+            if (!value.isNullOrBlank()) {
+                metadataList.add(q.title to value)
+            }
+        }
+        
+        if (metadataList.isNotEmpty()) {
+            metadataList.chunked(3).forEach { rowItems ->
+                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Start) {
+                    rowItems.forEach { (label, value) ->
+                        Column(Modifier.weight(1f)) {
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    repeat(3 - rowItems.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // --- TAGS ---
         if (entry.tags.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            WrapChips {
+            mobile.dairy.app.ui.components.WrapChips {
                 entry.tags.forEach { t ->
                     Box(
                         Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
@@ -438,7 +551,10 @@ private fun EntryCard(
 @HiltViewModel
 class EntryEditorViewModel @Inject constructor(
     private val entryRepo: EntryRepository,
+    private val prefsRepo: mobile.dairy.app.data.PrefsRepository
 ) : ViewModel() {
+
+    val appPrefs = prefsRepo.appPrefs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), mobile.dairy.app.domain.AppPrefs())
 
     val loaded = MutableStateFlow<JournalEntry?>(null)
     val ready = MutableStateFlow(false)
@@ -535,66 +651,11 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
         ) {
             Spacer(Modifier.height(12.dp))
             
-            Text("How are you feeling?", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(16.dp))
-            MoodPicker(entry.moods) { key ->
-                entry = entry.copy(moods = if (entry.moods.contains(key)) entry.moods - key else entry.moods + key)
-            }
-
-            Spacer(Modifier.height(32.dp))
-            Text("The day, in your words", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
+            val appPrefsState by vm.appPrefs.collectAsState()
+            val activeQuestions = appPrefsState.journalQuestions.filter { it.isActive }
             
-            TextField(
-                value = entry.note ?: "",
-                onValueChange = { entry = entry.copy(note = it.ifBlank { null }) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 300.dp),
-                placeholder = { Text("Dear diary...", style = MaterialTheme.typography.bodyLarge) },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                ),
-                shape = RoundedCornerShape(20.dp),
-                textStyle = MaterialTheme.typography.bodyLarge
-            )
-
-            SectionTitle("Moments")
-            Editor("Best part of your day", entry.bestPart ?: "") { entry = entry.copy(bestPart = it.ifBlank { null }) }
-            Editor("Most difficult part", entry.hardestPart ?: "") { entry = entry.copy(hardestPart = it.ifBlank { null }) }
-
-            SectionTitle("Actions & Lessons")
-            Editor("Good things you did", entry.goodThings ?: "") { entry = entry.copy(goodThings = it.ifBlank { null }) }
-            Editor("Mistakes or bad choices", entry.mistakes ?: "") { entry = entry.copy(mistakes = it.ifBlank { null }) }
-            Editor("Lessons learned", entry.lessons ?: "") { entry = entry.copy(lessons = it.ifBlank { null }) }
-
-            SectionTitle("Decisions")
-            Editor("One good decision", entry.goodDecision ?: "") { entry = entry.copy(goodDecision = it.ifBlank { null }) }
-            Editor("Improvement for tomorrow", entry.improvement ?: "") { entry = entry.copy(improvement = it.ifBlank { null }) }
-
-            SectionTitle("People")
-            PeopleFeelingPicker(entry.people, recentPeople) { entry = entry.copy(people = it) }
-
-            SectionTitle("Gratitude")
-            if (error != null) {
-                Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp))
-            }
-            WrapChips {
-                (Constants.GRATITUDE_SUGGESTIONS + entry.gratitude).distinct().forEach { g ->
-                    FilterChip(
-                        selected = entry.gratitude.contains(g),
-                        onClick = {
-                            entry = entry.copy(
-                                gratitude = if (entry.gratitude.contains(g)) entry.gratitude - g else entry.gratitude + g,
-                            )
-                        },
-                        label = { Text(g) },
-                    )
-                }
+            activeQuestions.forEach { q ->
+                EditorStepContent(q, entry, recentPeople, { patch -> entry = patch(entry) }, error)
             }
 
             SectionTitle("Tags")
@@ -624,13 +685,189 @@ private fun JournalEntry.withPersonFeeling(index: Int, feeling: String): Journal
     copy(people = people.mapIndexed { i, p -> if (i == index) p.copy(feeling = feeling) else p })
 
 @Composable
-private fun Editor(placeholder: String, value: String, minLines: Int = 3, onChange: (String) -> Unit) {
+private fun Editor(placeholder: String, value: String, minLines: Int = 3, numeric: Boolean = false, onChange: (String) -> Unit) {
     var text by rememberSaveable(placeholder) { mutableStateOf(value) }
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it; onChange(it) },
+        onValueChange = { if (it.length <= 1500) { text = it; onChange(it) } },
         placeholder = { Text(placeholder) },
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         minLines = minLines,
+        singleLine = minLines == 1,
+        keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
     )
+}
+
+@Composable
+private fun EditorStepContent(
+    q: mobile.dairy.app.domain.JournalQuestionDef,
+    entry: mobile.dairy.app.domain.JournalEntry,
+    recentPeople: List<mobile.dairy.app.domain.PersonRef>,
+    patch: ((mobile.dairy.app.domain.JournalEntry) -> mobile.dairy.app.domain.JournalEntry) -> Unit,
+    error: String?
+) {
+    SectionTitle(q.title)
+    if (q.subtitle != null) {
+        Text(q.subtitle!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+    }
+
+    if (q.isCustom) {
+        val currentValue = entry.customAnswers[q.id] ?: ""
+        when (q.type) {
+            "text" -> Editor(q.title, currentValue, minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "number" -> Editor(q.title, currentValue, minLines = 1, numeric = true) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "slider" -> mobile.dairy.app.ui.components.RatingScale(q.title, Icons.Default.Star, currentValue.toIntOrNull() ?: 5) { n -> patch { it.copy(customAnswers = it.customAnswers + (q.id to n.toString())) } }
+            "toggle" -> {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Text("No", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(16.dp))
+                    androidx.compose.material3.Switch(checked = currentValue == "yes", onCheckedChange = { isChecked -> patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to if (isChecked) "yes" else "no")) } })
+                    Spacer(Modifier.width(16.dp))
+                    Text("Yes", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            "dropdown" -> {
+                WrapChips {
+                    q.options.forEach { opt ->
+                        FilterChip(
+                            selected = currentValue == opt,
+                            onClick = { patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to opt)) } },
+                            label = { Text(opt) }
+                        )
+                    }
+                }
+            }
+            "date" -> DatePickerField(currentValue, "Select date") { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            else -> Editor(q.title, currentValue, minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+        }
+        Spacer(Modifier.height(24.dp))
+        return
+    }
+
+    when (q.id) {
+        "q_feeling" -> MoodPicker(entry.moods) { key ->
+            patch { d -> d.copy(moods = if (d.moods.contains(key)) d.moods - key else d.moods + key) }
+        }
+        "q_feeling_reason" -> {
+            WrapChips {
+                (Constants.CAUSE_SUGGESTIONS + entry.moodCauses).distinct().forEach { c ->
+                    FilterChip(
+                        selected = entry.moodCauses.contains(c),
+                        onClick = { patch { d -> d.copy(moodCauses = if (d.moodCauses.contains(c)) d.moodCauses - c else d.moodCauses + c) } },
+                        label = { Text(c) },
+                    )
+                }
+            }
+        }
+        "q_people" -> {
+            PeopleFeelingPicker(entry.people, recentPeople) { newList ->
+                patch { it.copy(people = newList) }
+            }
+        }
+        "q_best_part" -> Editor("A moment worth remembering…", entry.bestPart ?: "") { v -> patch { it.copy(bestPart = v.ifBlank { null }) } }
+        "q_hardest_part" -> Editor("What was heavy today…", entry.hardestPart ?: "") { v -> patch { it.copy(hardestPart = v.ifBlank { null }) } }
+        "q_good_things" -> Editor("Something you did well or something good that happened...", entry.goodThings ?: "") { v -> patch { it.copy(goodThings = v.ifBlank { null }) } }
+        "q_mistakes" -> Editor("It's okay to be honest with yourself...", entry.mistakes ?: "") { v -> patch { it.copy(mistakes = v.ifBlank { null }) } }
+        "q_lessons" -> Editor("What's the takeaway from today?", entry.lessons ?: "") { v -> patch { it.copy(lessons = v.ifBlank { null }) } }
+        "q_gratitude" -> {
+            if (error != null) {
+                Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp))
+            }
+            WrapChips {
+                (Constants.GRATITUDE_SUGGESTIONS + entry.gratitude).distinct().forEach { g ->
+                    FilterChip(
+                        selected = entry.gratitude.contains(g),
+                        onClick = { patch { d -> d.copy(gratitude = if (d.gratitude.contains(g)) d.gratitude - g else d.gratitude + g) } },
+                        label = { Text(g) },
+                    )
+                }
+            }
+        }
+        "q_good_decision" -> {
+            WrapChips {
+                Constants.DECISION_SUGGESTIONS.forEach { c ->
+                    FilterChip(selected = entry.goodDecision == c, onClick = { patch { it.copy(goodDecision = c) } }, label = { Text(c) })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Editor("Or write your own…", entry.goodDecision ?: "", minLines = 1) { v -> patch { it.copy(goodDecision = v.ifBlank { null }) } }
+        }
+        "q_improve_tomorrow" -> {
+            WrapChips {
+                Constants.IMPROVEMENT_SUGGESTIONS.forEach { c ->
+                    FilterChip(selected = entry.improvement == c, onClick = { patch { it.copy(improvement = c) } }, label = { Text(c) })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Editor("One small thing…", entry.improvement ?: "", minLines = 1) { v -> patch { it.copy(improvement = v.ifBlank { null }) } }
+        }
+        "q_anything_else" -> {
+            TextField(
+                value = entry.note ?: "",
+                onValueChange = { v -> patch { it.copy(note = v.ifBlank { null }) } },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp),
+                placeholder = { Text("Dear diary...", style = MaterialTheme.typography.bodyLarge) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent
+                ),
+                shape = RoundedCornerShape(20.dp),
+                textStyle = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerField(
+    value: String,
+    placeholder: String,
+    onChange: (String) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    
+    Box {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            placeholder = { Text(placeholder) },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            trailingIcon = {
+                Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+            }
+        )
+        Box(modifier = Modifier.matchParentSize().clickable { showDialog = true })
+    }
+
+    if (showDialog) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = if (value.isNotBlank()) {
+                runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(value)?.time }.getOrNull()
+            } else null
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { millis ->
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        onChange(sdf.format(java.util.Date(millis)))
+                    }
+                    showDialog = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
 }

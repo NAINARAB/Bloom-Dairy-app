@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +57,10 @@ import androidx.compose.material3.rememberDatePickerState
 import kotlin.math.roundToInt
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.PhonelinkOff
 import androidx.compose.material.icons.filled.Security
@@ -82,7 +85,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import mobile.dairy.app.core.Dates
@@ -345,7 +347,7 @@ fun RatingScale(label: String, icon: ImageVector, value: Int?, onChange: (Int) -
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                for (i in 1..steps) {
+                repeat(steps) {
                     Box(Modifier.size(3.dp).background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f), CircleShape))
                 }
             }
@@ -864,4 +866,66 @@ fun AccentDot(color: Color, selected: Boolean, onClick: () -> Unit) {
             )
             .clickable(onClick = onClick),
     )
+}
+
+/* ------------------------------------------------------------------ */
+/* GradientCard and CircularRatingIndicator                             */
+/* ------------------------------------------------------------------ */
+
+@Composable
+fun GradientCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    gradientColors: List<Color>,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val shape = RoundedCornerShape(28.dp)
+    val base = modifier
+        .fillMaxWidth()
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(4.dp)
+    
+    val borderBrush = Brush.linearGradient(gradientColors)
+    val backgroundBrush = remember(gradientColors) {
+        Brush.linearGradient(gradientColors.map { it.copy(alpha = 0.05f) })
+    }
+    
+    Box(modifier = base.background(MaterialTheme.colorScheme.background, shape).border(1.5.dp, borderBrush, shape)) {
+        Box(
+            modifier = Modifier.matchParentSize().background(backgroundBrush, shape)
+        )
+        Column(Modifier.padding(20.dp), content = content)
+    }
+}
+
+@Composable
+fun CircularRatingIndicator(
+    value: Int,
+    max: Int = 10,
+    label: String,
+    gradientColors: List<Color>
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(4.dp))
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(56.dp)) {
+            Canvas(modifier = Modifier.size(48.dp)) {
+                drawArc(
+                    color = Color.Gray.copy(alpha = 0.2f),
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                )
+                drawArc(
+                    brush = Brush.linearGradient(gradientColors),
+                    startAngle = -90f,
+                    sweepAngle = (value.toFloat() / max.toFloat()) * 360f,
+                    useCenter = false,
+                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+            Text("$value/${max}", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+        }
+    }
 }

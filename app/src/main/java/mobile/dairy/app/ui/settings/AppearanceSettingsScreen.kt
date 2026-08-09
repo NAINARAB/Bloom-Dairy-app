@@ -27,6 +27,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import mobile.dairy.app.ui.components.AccentDot
@@ -83,6 +91,33 @@ fun AppearanceSettingsScreen(nav: NavController, vm: SettingsViewModel = hiltVie
                     ACCENTS.keys.forEach { key ->
                         val color = if (isSystemInDarkTheme()) ACCENTS[key]!!.dark else ACCENTS[key]!!.light
                         AccentDot(color, p.accent == key) { vm.save(mapOf("accent" to key)) }
+                    }
+                }
+                
+                Spacer(Modifier.height(24.dp))
+                Eyebrow("Card Gradient")
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    mobile.dairy.app.ui.theme.GRADIENTS.keys.forEach { key ->
+                        val grad = mobile.dairy.app.ui.theme.GRADIENTS[key]!!
+                        val colors = if (isSystemInDarkTheme()) grad.dark else grad.light
+                        val brush = androidx.compose.ui.graphics.Brush.linearGradient(colors)
+                        val isSelected = p.cardGradient == key
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(brush)
+                                .clickable { vm.save(mapOf("cardGradient" to key)) }
+                                .border(
+                                    width = if (isSelected) 3.dp else 0.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                    shape = androidx.compose.foundation.shape.CircleShape
+                                )
+                        )
                     }
                 }
             }
