@@ -75,10 +75,10 @@ class InsightsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val ctx = combine(
-        entryRepo.entries(90),
-        entryRepo.ratings(90),
-        goalRepo.updateLog(90),
-        combine(financeRepo.expenses(62), financeRepo.savings(62), insightRepo.screenTime(30), prefsRepo.appPrefs()) {
+        entryRepo.entries(180),
+        entryRepo.ratings(180),
+        goalRepo.updateLog(180),
+        combine(financeRepo.expenses(180), financeRepo.savings(180), insightRepo.screenTime(90), prefsRepo.appPrefs()) {
             e, s, st, p -> listOf(e, s, st, p)
         },
     ) { entries, ratings, goalLog, extra ->

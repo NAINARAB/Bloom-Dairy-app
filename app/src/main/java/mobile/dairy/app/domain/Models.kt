@@ -199,7 +199,8 @@ data class AppPrefs(
         JournalQuestionDef("q_feeling_reason", "What made you feel this way?", "Situations, habits — tap or add your own.", "text", isMandatory = true, isActive = true),
         JournalQuestionDef("q_people", "Who made your day?", "People who made you feel stronger, happy, or even stressed.", "person", isMandatory = true, isActive = true),
         JournalQuestionDef("q_lessons", "Lessons learned?", "What did today teach you?", "text", isMandatory = true, isActive = true),
-        JournalQuestionDef("q_rating", "Rate your day", null, "rating_group", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_rating_performance", "Performance", null, "rating_group", isMandatory = true, isActive = true),
+        JournalQuestionDef("q_rating_wellbeing", "Wellbeing", null, "rating_group", isMandatory = true, isActive = true),
         JournalQuestionDef("q_anything_else", "Anything else for today?", "A free note, a memory, a thought for future-you.", "text", isMandatory = true, isActive = true),
         
         // Optional (7)

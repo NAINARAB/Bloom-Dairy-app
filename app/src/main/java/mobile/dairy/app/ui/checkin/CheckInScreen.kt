@@ -2,6 +2,7 @@ package mobile.dairy.app.ui.checkin
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +23,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterCenterFocus
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.SentimentSatisfied
+import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.WbSunny
@@ -51,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
@@ -175,7 +184,19 @@ class CheckInViewModel @Inject constructor(
                     )
                     entryRepo.upsertEntry(entry)
                     entryRepo.upsertRating(
-                        DailyRating(date = today, overall = d.overall, focus = d.focus, goalEffort = d.effort)
+                        DailyRating(
+                            date = today, 
+                            overall = d.overall, 
+                            focus = d.focus, 
+                            goalEffort = d.goalEffort,
+                            happiness = d.happiness,
+                            energy = d.energy,
+                            productivity = d.productivity,
+                            discipline = d.discipline,
+                            stress = d.stress,
+                            sleep = d.sleep,
+                            financialDiscipline = d.financialDiscipline
+                        )
                     )
 
                     // Ensure everything is synced before clearing draft
@@ -187,7 +208,19 @@ class CheckInViewModel @Inject constructor(
                     val ctx = InsightContext(
                         today = today, currency = prefs.currency,
                         entries = recentEntries.filter { it.date != today } + entry,
-                        ratings = listOf(DailyRating(date = today, overall = d.overall, focus = d.focus, goalEffort = d.effort)),
+                        ratings = listOf(DailyRating(
+                            date = today, 
+                            overall = d.overall, 
+                            focus = d.focus, 
+                            goalEffort = d.goalEffort,
+                            happiness = d.happiness,
+                            energy = d.energy,
+                            productivity = d.productivity,
+                            discipline = d.discipline,
+                            stress = d.stress,
+                            sleep = d.sleep,
+                            financialDiscipline = d.financialDiscipline
+                        )),
                         goals = activeGoals,
                     )
                     val message = InsightEngine.checkinCompleteMessage(ctx)
@@ -280,8 +313,12 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
     val pager = rememberPagerState { activeQuestions.size }
     val scope = rememberCoroutineScope()
 
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
     Scaffold(
-        modifier = Modifier.imePadding(),
+        modifier = Modifier.imePadding().pointerInput(Unit) {
+            detectTapGestures(onTap = { focusManager.clearFocus() })
+        },
         topBar = {
             Column {
                 Row(
@@ -334,6 +371,7 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                 val isLast = pager.currentPage == activeQuestions.size - 1
                 Button(
                     onClick = {
+                        focusManager.clearFocus()
                         if (isLast) {
                             vm.finish()
                         } else {
@@ -526,9 +564,20 @@ private fun StepContent(
             }
         }
 
-        "q_rating" -> {
-            RatingScale("Overall day", Icons.Default.WbSunny, draft.overall) { n -> patch { it.copy(overall = n) } }
+        "q_rating_performance" -> {
+            RatingScale("Productivity", Icons.Default.TrendingUp, draft.productivity) { n -> patch { it.copy(productivity = n) } }
             RatingScale("Focus", Icons.Default.FilterCenterFocus, draft.focus) { n -> patch { it.copy(focus = n) } }
+            RatingScale("Discipline", Icons.Default.SelfImprovement, draft.discipline) { n -> patch { it.copy(discipline = n) } }
+            RatingScale("Goal effort", Icons.Default.FitnessCenter, draft.goalEffort) { n -> patch { it.copy(goalEffort = n) } }
+            RatingScale("Financial discipline", Icons.Default.Savings, draft.financialDiscipline) { n -> patch { it.copy(financialDiscipline = n) } }
+        }
+
+        "q_rating_wellbeing" -> {
+            RatingScale("Overall day", Icons.Default.WbSunny, draft.overall) { n -> patch { it.copy(overall = n) } }
+            RatingScale("Energy", Icons.Default.Bolt, draft.energy) { n -> patch { it.copy(energy = n) } }
+            RatingScale("Happiness", Icons.Default.SentimentSatisfied, draft.happiness) { n -> patch { it.copy(happiness = n) } }
+            RatingScale("Stress handling", Icons.Default.Spa, draft.stress) { n -> patch { it.copy(stress = n) } }
+            RatingScale("Sleep quality", Icons.Default.Bedtime, draft.sleep) { n -> patch { it.copy(sleep = n) } }
         }
 
         "q_anything_else" -> NoteField(draft.note, "Dear diary…", minLines = 5, autoFocus = isCurrentPage) { v ->
@@ -599,7 +648,7 @@ private fun DatePickerField(
     if (showDialog) {
         val dateState = rememberDatePickerState(
             initialSelectedDateMillis = if (value.isNotBlank()) {
-                runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(value)?.time }.getOrNull()
+                runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).parse(value)?.time }.getOrNull()
             } else null
         )
         DatePickerDialog(
@@ -607,7 +656,7 @@ private fun DatePickerField(
             confirmButton = {
                 TextButton(onClick = {
                     dateState.selectedDateMillis?.let { millis ->
-                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
                         onChange(sdf.format(java.util.Date(millis)))
                     }
                     showDialog = false

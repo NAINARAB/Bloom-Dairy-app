@@ -94,6 +94,10 @@ class EntryRepository @Inject constructor(private val paths: FirestorePaths) {
         paths.col("entries").document(date).asFlow().map { it.toObject(JournalEntry::class.java) }
             .catch { Log.e("Repo", "Error", it); emit(null) }
 
+    fun rating(date: String): Flow<DailyRating?> =
+        paths.col("dailyRatings").document(date).asFlow().map { it.toObject(DailyRating::class.java) }
+            .catch { Log.e("Repo", "Error", it); emit(null) }
+
     fun ratings(days: Long = 90): Flow<List<DailyRating>> {
         return paths.col("dailyRatings")
             .orderBy("date", Query.Direction.DESCENDING)
@@ -396,6 +400,21 @@ class PrefsRepository @Inject constructor(private val paths: FirestorePaths) {
 
     fun appPrefs(): Flow<AppPrefs> =
         paths.col("prefs").document("app").asFlow().map { it.toObject(AppPrefs::class.java) ?: AppPrefs() }
+            .map { prefs ->
+                if (prefs.journalQuestions.any { it.id == "q_rating" }) {
+                    val newQuestions = prefs.journalQuestions.flatMap { q ->
+                        if (q.id == "q_rating") {
+                            listOf(
+                                mobile.dairy.app.domain.JournalQuestionDef("q_rating_performance", "Performance", null, "rating_group", isMandatory = true, isActive = q.isActive),
+                                mobile.dairy.app.domain.JournalQuestionDef("q_rating_wellbeing", "Wellbeing", null, "rating_group", isMandatory = true, isActive = q.isActive)
+                            )
+                        } else listOf(q)
+                    }
+                    val migratedPrefs = prefs.copy(journalQuestions = newQuestions)
+                    save(mapOf("journalQuestions" to newQuestions))
+                    migratedPrefs
+                } else prefs
+            }
             .catch { Log.e("Repo", "Error", it); emit(AppPrefs()) }
 
     suspend fun save(patch: Map<String, Any?>) {

@@ -279,18 +279,18 @@ fun MoodEmojiRow(moods: List<String>, size: Int = 18) {
 /* ------------------------------------------------------------------ */
 
 @Composable
-fun RatingScale(label: String, icon: ImageVector, value: Int?, onChange: (Int) -> Unit) {
+fun RatingScale(label: String, icon: ImageVector, value: Int?, enabled: Boolean = true, onChange: (Int) -> Unit) {
     Column(Modifier.padding(bottom = 16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 Spacer(Modifier.width(8.dp))
-                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
             }
             Text(
                 "${value ?: 5}/10",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (value != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else if (value != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -300,6 +300,7 @@ fun RatingScale(label: String, icon: ImageVector, value: Int?, onChange: (Int) -
         val currentValue = value ?: 5
         
         fun updateFromX(x: Float) {
+            if (!enabled) return
             val fraction = (x / width).coerceIn(0f, 1f)
             val n = (fraction * steps).roundToInt().coerceIn(1, steps)
             if (n != currentValue) onChange(n)
@@ -310,15 +311,13 @@ fun RatingScale(label: String, icon: ImageVector, value: Int?, onChange: (Int) -
                 .fillMaxWidth()
                 .height(32.dp)
                 .onGloballyPositioned { width = it.size.width.toFloat().coerceAtLeast(1f) }
-                .pointerInput(Unit) {
-                    detectTapGestures { offset -> updateFromX(offset.x) }
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        updateFromX(change.position.x)
-                    }
-                },
+                .then(
+                    if (enabled) {
+                        Modifier
+                            .pointerInput(Unit) { detectTapGestures { offset -> updateFromX(offset.x) } }
+                            .pointerInput(Unit) { detectDragGestures { change, _ -> change.consume(); updateFromX(change.position.x) } }
+                    } else Modifier
+                ),
             contentAlignment = Alignment.CenterStart
         ) {
             // Track background
@@ -906,7 +905,13 @@ fun CircularRatingIndicator(
     gradientColors: List<Color>
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = label, 
+            style = MaterialTheme.typography.labelSmall, 
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
         Spacer(Modifier.height(4.dp))
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(56.dp)) {
             Canvas(modifier = Modifier.size(48.dp)) {

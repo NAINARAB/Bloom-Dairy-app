@@ -1,5 +1,8 @@
 package mobile.dairy.app.ui.journal
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,10 +48,25 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Badge
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.FilterCenterFocus
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.SentimentSatisfied
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -326,7 +344,7 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
             items(monthEntries.size) { i ->
                 val entry = monthEntries[i]
                 val rating = ratingsMap[entry.date]
-                EntryCard(
+                JournalCard(
                     entry = entry,
                     rating = rating,
                     questions = journalQuestions,
@@ -342,14 +360,16 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
 }
 
 @Composable
-private fun EntryCard(
+fun JournalCard(
     entry: JournalEntry,
     rating: mobile.dairy.app.domain.DailyRating?,
     questions: List<mobile.dairy.app.domain.JournalQuestionDef>,
-    gradientKey: String,
+    gradientKey: String?,
     onOpen: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
+    var ratingsExpanded by remember { mutableStateOf(false) }
+    
     val gradientColors = mobile.dairy.app.ui.theme.GRADIENTS[gradientKey]?.let { 
         if (androidx.compose.foundation.isSystemInDarkTheme()) it.dark else it.light 
     } ?: listOf(Color(0xFF533483), Color(0xFF16213E)) // Fallback to Midnight
@@ -391,7 +411,7 @@ private fun EntryCard(
         
         Spacer(Modifier.height(16.dp))
 
-        // --- SECOND ROW: HUGE EMOJI & CIRCULAR RATINGS ---
+        // --- SECOND ROW: HUGE EMOJI & MAIN RATINGS ---
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val primaryMood = entry.moods.firstOrNull()?.let { mobile.dairy.app.core.Mood.fromKey(it) }
             Text(
@@ -400,21 +420,15 @@ private fun EntryCard(
                 modifier = Modifier.padding(end = 16.dp)
             )
             
-            // Gather numeric values for circular ratings
-            val circularRatings = mutableListOf<Pair<String, Int>>()
-            rating?.overall?.let { circularRatings.add("Overall" to it) }
-            rating?.focus?.let { circularRatings.add("Focus" to it) }
+            // Render Overall and Productivity statically at the top
+            val mainRatings = listOfNotNull(
+                rating?.overall?.let { "Overall Day" to it },
+                rating?.productivity?.let { "Productivity" to it }
+            )
             
-            questions.forEach { q ->
-                if (q.type == "slider") {
-                    val value = entry.customAnswers[q.id]?.toIntOrNull()
-                    if (value != null) circularRatings.add(q.title to value)
-                }
-            }
-            
-            if (circularRatings.isNotEmpty()) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(circularRatings) { (label, value) ->
+            if (mainRatings.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    mainRatings.forEach { (label, value) ->
                         mobile.dairy.app.ui.components.CircularRatingIndicator(
                             value = value,
                             label = label.take(12),
@@ -520,9 +534,8 @@ private fun EntryCard(
                             Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    repeat(3 - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
+                    val missing = 3 - rowItems.size
+                    repeat(missing) { Spacer(Modifier.weight(1f)) }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -537,6 +550,65 @@ private fun EntryCard(
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text("#$t", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+
+        // --- EXPANDABLE RATINGS SECTION ---
+        val secondaryRatings = mutableListOf<Pair<String, Int>>()
+        rating?.energy?.let { secondaryRatings.add("Energy" to it) }
+        rating?.happiness?.let { secondaryRatings.add("Happiness" to it) }
+        rating?.focus?.let { secondaryRatings.add("Focus" to it) }
+        rating?.discipline?.let { secondaryRatings.add("Discipline" to it) }
+        rating?.goalEffort?.let { secondaryRatings.add("Goal effort" to it) }
+        rating?.stress?.let { secondaryRatings.add("Stress" to it) }
+        rating?.sleep?.let { secondaryRatings.add("Sleep" to it) }
+        rating?.financialDiscipline?.let { secondaryRatings.add("Finances" to it) }
+        
+        questions.forEach { q ->
+            if (q.type == "slider") {
+                val value = entry.customAnswers[q.id]?.toIntOrNull()
+                if (value != null) secondaryRatings.add(q.title to value)
+            }
+        }
+
+        if (secondaryRatings.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
+            TextButton(
+                onClick = { ratingsExpanded = !ratingsExpanded },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Text(if (ratingsExpanded) "Hide ratings" else "Show ratings", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    if (ratingsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            androidx.compose.animation.AnimatedVisibility(
+                visible = ratingsExpanded,
+                enter = androidx.compose.animation.expandVertically(),
+                exit = androidx.compose.animation.shrinkVertically()
+            ) {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    secondaryRatings.chunked(4).forEach { rowRatings ->
+                        Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowRatings.forEach { (label, value) ->
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    mobile.dairy.app.ui.components.CircularRatingIndicator(
+                                        value = value,
+                                        label = label.take(12),
+                                        gradientColors = gradientColors
+                                    )
+                                }
+                            }
+                            val missing = 4 - rowRatings.size
+                            repeat(missing) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
                 }
             }
@@ -557,6 +629,7 @@ class EntryEditorViewModel @Inject constructor(
     val appPrefs = prefsRepo.appPrefs().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), mobile.dairy.app.domain.AppPrefs())
 
     val loaded = MutableStateFlow<JournalEntry?>(null)
+    val loadedRating = MutableStateFlow<mobile.dairy.app.domain.DailyRating?>(null)
     val ready = MutableStateFlow(false)
     val busy = MutableStateFlow(false)
     val error = MutableStateFlow<String?>(null)
@@ -571,15 +644,20 @@ class EntryEditorViewModel @Inject constructor(
         viewModelScope.launch {
             loaded.value = runCatching { entryRepo.entry(date).first() }.getOrNull()
                 ?: JournalEntry(id = date, date = date)
+            loadedRating.value = runCatching { entryRepo.rating(date).first() }.getOrNull()
+                ?: mobile.dairy.app.domain.DailyRating(date = date)
             ready.value = true
         }
     }
 
-    fun save(entry: JournalEntry) {
+    fun save(entry: JournalEntry, rating: mobile.dairy.app.domain.DailyRating) {
         viewModelScope.launch {
             busy.value = true
             error.value = null
-            runCatching { entryRepo.upsertEntry(entry) }
+            runCatching {
+                entryRepo.upsertEntry(entry)
+                entryRepo.upsertRating(rating)
+            }
                 .onSuccess {
                     busy.value = false
                     saved.value = true
@@ -609,6 +687,7 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
     LaunchedEffect(date) { vm.load(date) }
     val ready by vm.ready.collectAsState()
     val loaded by vm.loaded.collectAsState()
+    val loadedRating by vm.loadedRating.collectAsState()
     val saved by vm.saved.collectAsState()
     val busy by vm.busy.collectAsState()
     val error by vm.error.collectAsState()
@@ -619,7 +698,16 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
     }
     if (!ready || loaded == null) return
 
-    var entry by remember { mutableStateOf(loaded!!) }
+    var entry by remember(loaded) { mutableStateOf(loaded!!) }
+    var rating by remember(loadedRating) { mutableStateOf(loadedRating ?: mobile.dairy.app.domain.DailyRating(date = date)) }
+
+    val createdDateKey = remember(entry) {
+        if (entry.createdAt > 0L) Dates.fromMillis(entry.createdAt) else entry.date
+    }
+    val daysOld = remember(createdDateKey) {
+        runCatching { Dates.daysBetween(createdDateKey, Dates.todayKey()) }.getOrDefault(0L)
+    }
+    val isEditable = daysOld <= 7
 
     Scaffold(
         topBar = {
@@ -631,9 +719,9 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
                     }
                 },
                 actions = {
-                    IconButton(onClick = { vm.save(entry) }, enabled = !busy) {
+                    IconButton(onClick = { vm.save(entry, rating) }, enabled = !busy && isEditable) {
                         if (busy) CircularProgressIndicator(Modifier.size(24.dp))
-                        else Icon(Icons.Default.Done, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                        else Icon(Icons.Default.Done, contentDescription = "Save", tint = if (isEditable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -650,31 +738,64 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
                 .padding(horizontal = 24.dp),
         ) {
             Spacer(Modifier.height(12.dp))
+
+            if (!isEditable) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "Entries older than 7 days from creation date cannot be edited (Read-Only).",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
             
             val appPrefsState by vm.appPrefs.collectAsState()
             val activeQuestions = appPrefsState.journalQuestions.filter { it.isActive }
             
             activeQuestions.forEach { q ->
-                EditorStepContent(q, entry, recentPeople, { patch -> entry = patch(entry) }, error)
+                EditorStepContent(
+                    q = q,
+                    entry = entry,
+                    rating = rating,
+                    recentPeople = recentPeople,
+                    isEditable = isEditable,
+                    patch = { patch -> entry = patch(entry) },
+                    patchRating = { patch -> rating = patch(rating) },
+                    error = error
+                )
             }
 
             SectionTitle("Tags")
             WrapChips {
                 entry.tags.forEach { t ->
-                    FilterChip(selected = true, onClick = { entry = entry.copy(tags = entry.tags - t) },
-                        label = { Text("#$t") })
+                    FilterChip(
+                        selected = true,
+                        enabled = isEditable,
+                        onClick = { if (isEditable) entry = entry.copy(tags = entry.tags - t) },
+                        label = { Text("#$t") }
+                    )
                 }
             }
             
             Spacer(Modifier.height(32.dp))
             Button(
-                onClick = { vm.save(entry) }, 
+                onClick = { vm.save(entry, rating) }, 
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = !busy
+                enabled = !busy && isEditable
             ) { 
                 if (busy) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                else Text("Save entry", fontWeight = FontWeight.Bold)
+                else Text(if (isEditable) "Save entry" else "Read-only (7+ days old)", fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(48.dp))
         }
@@ -685,7 +806,7 @@ private fun JournalEntry.withPersonFeeling(index: Int, feeling: String): Journal
     copy(people = people.mapIndexed { i, p -> if (i == index) p.copy(feeling = feeling) else p })
 
 @Composable
-private fun Editor(placeholder: String, value: String, minLines: Int = 3, numeric: Boolean = false, onChange: (String) -> Unit) {
+private fun Editor(placeholder: String, value: String, minLines: Int = 3, numeric: Boolean = false, enabled: Boolean = true, onChange: (String) -> Unit) {
     var text by rememberSaveable(placeholder) { mutableStateOf(value) }
     OutlinedTextField(
         value = text,
@@ -694,6 +815,7 @@ private fun Editor(placeholder: String, value: String, minLines: Int = 3, numeri
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         minLines = minLines,
         singleLine = minLines == 1,
+        enabled = enabled,
         keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
     )
 }
@@ -702,8 +824,11 @@ private fun Editor(placeholder: String, value: String, minLines: Int = 3, numeri
 private fun EditorStepContent(
     q: mobile.dairy.app.domain.JournalQuestionDef,
     entry: mobile.dairy.app.domain.JournalEntry,
+    rating: mobile.dairy.app.domain.DailyRating,
     recentPeople: List<mobile.dairy.app.domain.PersonRef>,
+    isEditable: Boolean,
     patch: ((mobile.dairy.app.domain.JournalEntry) -> mobile.dairy.app.domain.JournalEntry) -> Unit,
+    patchRating: ((mobile.dairy.app.domain.DailyRating) -> mobile.dairy.app.domain.DailyRating) -> Unit,
     error: String?
 ) {
     SectionTitle(q.title)
@@ -715,14 +840,14 @@ private fun EditorStepContent(
     if (q.isCustom) {
         val currentValue = entry.customAnswers[q.id] ?: ""
         when (q.type) {
-            "text" -> Editor(q.title, currentValue, minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
-            "number" -> Editor(q.title, currentValue, minLines = 1, numeric = true) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
-            "slider" -> mobile.dairy.app.ui.components.RatingScale(q.title, Icons.Default.Star, currentValue.toIntOrNull() ?: 5) { n -> patch { it.copy(customAnswers = it.customAnswers + (q.id to n.toString())) } }
+            "text" -> Editor(q.title, currentValue, minLines = 3, enabled = isEditable) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "number" -> Editor(q.title, currentValue, minLines = 1, numeric = true, enabled = isEditable) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "slider" -> mobile.dairy.app.ui.components.RatingScale(q.title, Icons.Default.Star, currentValue.toIntOrNull() ?: 5, enabled = isEditable) { n -> patch { it.copy(customAnswers = it.customAnswers + (q.id to n.toString())) } }
             "toggle" -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Text("No", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.width(16.dp))
-                    androidx.compose.material3.Switch(checked = currentValue == "yes", onCheckedChange = { isChecked -> patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to if (isChecked) "yes" else "no")) } })
+                    androidx.compose.material3.Switch(checked = currentValue == "yes", enabled = isEditable, onCheckedChange = { isChecked -> patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to if (isChecked) "yes" else "no")) } })
                     Spacer(Modifier.width(16.dp))
                     Text("Yes", style = MaterialTheme.typography.titleMedium)
                 }
@@ -732,14 +857,15 @@ private fun EditorStepContent(
                     q.options.forEach { opt ->
                         FilterChip(
                             selected = currentValue == opt,
+                            enabled = isEditable,
                             onClick = { patch { d -> d.copy(customAnswers = d.customAnswers + (q.id to opt)) } },
                             label = { Text(opt) }
                         )
                     }
                 }
             }
-            "date" -> DatePickerField(currentValue, "Select date") { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
-            else -> Editor(q.title, currentValue, minLines = 3) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            "date" -> DatePickerField(currentValue, "Select date") { v -> if (isEditable) patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
+            else -> Editor(q.title, currentValue, minLines = 3, enabled = isEditable) { v -> patch { it.copy(customAnswers = it.customAnswers + (q.id to v)) } }
         }
         Spacer(Modifier.height(24.dp))
         return
@@ -747,13 +873,14 @@ private fun EditorStepContent(
 
     when (q.id) {
         "q_feeling" -> MoodPicker(entry.moods) { key ->
-            patch { d -> d.copy(moods = if (d.moods.contains(key)) d.moods - key else d.moods + key) }
+            if (isEditable) patch { d -> d.copy(moods = if (d.moods.contains(key)) d.moods - key else d.moods + key) }
         }
         "q_feeling_reason" -> {
             WrapChips {
                 (Constants.CAUSE_SUGGESTIONS + entry.moodCauses).distinct().forEach { c ->
                     FilterChip(
                         selected = entry.moodCauses.contains(c),
+                        enabled = isEditable,
                         onClick = { patch { d -> d.copy(moodCauses = if (d.moodCauses.contains(c)) d.moodCauses - c else d.moodCauses + c) } },
                         label = { Text(c) },
                     )
@@ -762,14 +889,14 @@ private fun EditorStepContent(
         }
         "q_people" -> {
             PeopleFeelingPicker(entry.people, recentPeople) { newList ->
-                patch { it.copy(people = newList) }
+                if (isEditable) patch { it.copy(people = newList) }
             }
         }
-        "q_best_part" -> Editor("A moment worth remembering…", entry.bestPart ?: "") { v -> patch { it.copy(bestPart = v.ifBlank { null }) } }
-        "q_hardest_part" -> Editor("What was heavy today…", entry.hardestPart ?: "") { v -> patch { it.copy(hardestPart = v.ifBlank { null }) } }
-        "q_good_things" -> Editor("Something you did well or something good that happened...", entry.goodThings ?: "") { v -> patch { it.copy(goodThings = v.ifBlank { null }) } }
-        "q_mistakes" -> Editor("It's okay to be honest with yourself...", entry.mistakes ?: "") { v -> patch { it.copy(mistakes = v.ifBlank { null }) } }
-        "q_lessons" -> Editor("What's the takeaway from today?", entry.lessons ?: "") { v -> patch { it.copy(lessons = v.ifBlank { null }) } }
+        "q_best_part" -> Editor("A moment worth remembering…", entry.bestPart ?: "", enabled = isEditable) { v -> patch { it.copy(bestPart = v.ifBlank { null }) } }
+        "q_hardest_part" -> Editor("What was heavy today…", entry.hardestPart ?: "", enabled = isEditable) { v -> patch { it.copy(hardestPart = v.ifBlank { null }) } }
+        "q_good_things" -> Editor("Something you did well or something good that happened...", entry.goodThings ?: "", enabled = isEditable) { v -> patch { it.copy(goodThings = v.ifBlank { null }) } }
+        "q_mistakes" -> Editor("It's okay to be honest with yourself...", entry.mistakes ?: "", enabled = isEditable) { v -> patch { it.copy(mistakes = v.ifBlank { null }) } }
+        "q_lessons" -> Editor("What's the takeaway from today?", entry.lessons ?: "", enabled = isEditable) { v -> patch { it.copy(lessons = v.ifBlank { null }) } }
         "q_gratitude" -> {
             if (error != null) {
                 Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp))
@@ -778,6 +905,7 @@ private fun EditorStepContent(
                 (Constants.GRATITUDE_SUGGESTIONS + entry.gratitude).distinct().forEach { g ->
                     FilterChip(
                         selected = entry.gratitude.contains(g),
+                        enabled = isEditable,
                         onClick = { patch { d -> d.copy(gratitude = if (d.gratitude.contains(g)) d.gratitude - g else d.gratitude + g) } },
                         label = { Text(g) },
                     )
@@ -787,26 +915,53 @@ private fun EditorStepContent(
         "q_good_decision" -> {
             WrapChips {
                 Constants.DECISION_SUGGESTIONS.forEach { c ->
-                    FilterChip(selected = entry.goodDecision == c, onClick = { patch { it.copy(goodDecision = c) } }, label = { Text(c) })
+                    FilterChip(selected = entry.goodDecision == c, enabled = isEditable, onClick = { patch { it.copy(goodDecision = c) } }, label = { Text(c) })
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Editor("Or write your own…", entry.goodDecision ?: "", minLines = 1) { v -> patch { it.copy(goodDecision = v.ifBlank { null }) } }
+            Editor("Or write your own…", entry.goodDecision ?: "", minLines = 1, enabled = isEditable) { v -> patch { it.copy(goodDecision = v.ifBlank { null }) } }
         }
         "q_improve_tomorrow" -> {
             WrapChips {
                 Constants.IMPROVEMENT_SUGGESTIONS.forEach { c ->
-                    FilterChip(selected = entry.improvement == c, onClick = { patch { it.copy(improvement = c) } }, label = { Text(c) })
+                    FilterChip(selected = entry.improvement == c, enabled = isEditable, onClick = { patch { it.copy(improvement = c) } }, label = { Text(c) })
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Editor("One small thing…", entry.improvement ?: "", minLines = 1) { v -> patch { it.copy(improvement = v.ifBlank { null }) } }
+            Editor("One small thing…", entry.improvement ?: "", minLines = 1, enabled = isEditable) { v -> patch { it.copy(improvement = v.ifBlank { null }) } }
+        }
+        "q_rating_performance" -> {
+            mobile.dairy.app.ui.components.RatingScale("Productivity", Icons.Default.TrendingUp, rating.productivity, enabled = isEditable) { n -> patchRating { it.copy(productivity = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Focus", Icons.Default.FilterCenterFocus, rating.focus, enabled = isEditable) { n -> patchRating { it.copy(focus = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Discipline", Icons.Default.SelfImprovement, rating.discipline, enabled = isEditable) { n -> patchRating { it.copy(discipline = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Goal effort", Icons.Default.FitnessCenter, rating.goalEffort, enabled = isEditable) { n -> patchRating { it.copy(goalEffort = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Financial discipline", Icons.Default.Savings, rating.financialDiscipline, enabled = isEditable) { n -> patchRating { it.copy(financialDiscipline = n) } }
+        }
+        "q_rating_wellbeing" -> {
+            mobile.dairy.app.ui.components.RatingScale("Overall day", Icons.Default.WbSunny, rating.overall, enabled = isEditable) { n -> patchRating { it.copy(overall = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Energy", Icons.Default.Bolt, rating.energy, enabled = isEditable) { n -> patchRating { it.copy(energy = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Happiness", Icons.Default.SentimentSatisfied, rating.happiness, enabled = isEditable) { n -> patchRating { it.copy(happiness = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Stress handling", Icons.Default.Spa, rating.stress, enabled = isEditable) { n -> patchRating { it.copy(stress = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Sleep quality", Icons.Default.Bedtime, rating.sleep, enabled = isEditable) { n -> patchRating { it.copy(sleep = n) } }
+        }
+        "q_rating" -> {
+            mobile.dairy.app.ui.components.RatingScale("Productivity", Icons.Default.TrendingUp, rating.productivity, enabled = isEditable) { n -> patchRating { it.copy(productivity = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Focus", Icons.Default.FilterCenterFocus, rating.focus, enabled = isEditable) { n -> patchRating { it.copy(focus = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Discipline", Icons.Default.SelfImprovement, rating.discipline, enabled = isEditable) { n -> patchRating { it.copy(discipline = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Goal effort", Icons.Default.FitnessCenter, rating.goalEffort, enabled = isEditable) { n -> patchRating { it.copy(goalEffort = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Financial discipline", Icons.Default.Savings, rating.financialDiscipline, enabled = isEditable) { n -> patchRating { it.copy(financialDiscipline = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Overall day", Icons.Default.WbSunny, rating.overall, enabled = isEditable) { n -> patchRating { it.copy(overall = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Energy", Icons.Default.Bolt, rating.energy, enabled = isEditable) { n -> patchRating { it.copy(energy = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Happiness", Icons.Default.SentimentSatisfied, rating.happiness, enabled = isEditable) { n -> patchRating { it.copy(happiness = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Stress handling", Icons.Default.Spa, rating.stress, enabled = isEditable) { n -> patchRating { it.copy(stress = n) } }
+            mobile.dairy.app.ui.components.RatingScale("Sleep quality", Icons.Default.Bedtime, rating.sleep, enabled = isEditable) { n -> patchRating { it.copy(sleep = n) } }
         }
         "q_anything_else" -> {
             TextField(
                 value = entry.note ?: "",
-                onValueChange = { v -> patch { it.copy(note = v.ifBlank { null }) } },
+                onValueChange = { v -> if (isEditable) patch { it.copy(note = v.ifBlank { null }) } },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp),
+                enabled = isEditable,
                 placeholder = { Text("Dear diary...", style = MaterialTheme.typography.bodyLarge) },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
