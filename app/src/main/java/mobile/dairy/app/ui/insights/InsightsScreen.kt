@@ -78,10 +78,11 @@ class InsightsViewModel @Inject constructor(
         entryRepo.entries(180),
         entryRepo.ratings(180),
         goalRepo.updateLog(180),
+        goalRepo.goals(),
         combine(financeRepo.expenses(180), financeRepo.savings(180), insightRepo.screenTime(90), prefsRepo.appPrefs()) {
             e, s, st, p -> listOf(e, s, st, p)
         },
-    ) { entries, ratings, goalLog, extra ->
+    ) { entries, ratings, goalLog, goalsList, extra ->
         @Suppress("UNCHECKED_CAST")
         InsightContext(
             today = Dates.todayKey(),
@@ -89,6 +90,7 @@ class InsightsViewModel @Inject constructor(
             dailyBudget = (extra[3] as mobile.dairy.app.domain.AppPrefs).dailyBudget,
             entries = entries,
             ratings = ratings,
+            goals = goalsList,
             goalUpdates = goalLog,
             expenses = extra[0] as List<mobile.dairy.app.domain.Expense>,
             savings = extra[1] as List<mobile.dairy.app.domain.Saving>,
@@ -149,7 +151,7 @@ fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: Insig
                 AppDrawerItem(
                     icon = Icons.Default.CrisisAlert,
                     label = "Goals & Tasks",
-                    onClick = { /* nav.navigate(Routes.INSIGHTS_GOALS) */ }
+                    onClick = { nav.navigate(Routes.INSIGHTS_GOALS) }
                 )
             }
             item {
