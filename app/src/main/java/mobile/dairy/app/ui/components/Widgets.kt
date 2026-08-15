@@ -114,7 +114,7 @@ private val INSIGHT_ICONS = mapOf(
 /* ------------------------------------------------------------------ */
 
 @Composable
-fun GlobalLoadingOverlay(isLoading: Boolean) {
+fun GlobalLoadingOverlay(isLoading: Boolean, message: String = "Syncing...") {
     if (!isLoading) return
     
     val infiniteTransition = rememberInfiniteTransition(label = "page_flip")
@@ -157,7 +157,7 @@ fun GlobalLoadingOverlay(isLoading: Boolean) {
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text("Syncing...", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(message, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -413,8 +413,12 @@ fun WrapChips(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun InsightCard(insight: Insight, onDismiss: (() -> Unit)? = null) {
-    BloomCard(container = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.padding(bottom = 10.dp)) {
+fun InsightCard(
+    insight: Insight,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    BloomCard(container = MaterialTheme.colorScheme.primaryContainer, modifier = modifier.padding(bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             val vector = INSIGHT_ICONS[insight.icon]
             if (vector != null) {

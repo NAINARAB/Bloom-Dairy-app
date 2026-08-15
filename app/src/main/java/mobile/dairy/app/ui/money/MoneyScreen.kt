@@ -54,12 +54,13 @@ data class MoneyState(
     val prefs: AppPrefs = AppPrefs(),
     val expenses: List<Expense> = emptyList(),
     val savings: List<Saving> = emptyList(),
+    val monthlySpent: Double = 0.0,
 )
 
 @HiltViewModel
 class MoneyViewModel @Inject constructor(
     private val financeRepo: FinanceRepository,
-    prefsRepo: PrefsRepository,
+    private val prefsRepo: PrefsRepository,
 ) : ViewModel() {
 
     private val dateRange = MutableStateFlow<Pair<String?, String?>>(Dates.addDays(Dates.todayKey(), -7) to Dates.todayKey())
@@ -68,9 +69,10 @@ class MoneyViewModel @Inject constructor(
     val state = combine(
         prefsRepo.appPrefs(),
         dateRange.flatMapLatest { (start, end) -> financeRepo.expenses(start, end) },
-        dateRange.flatMapLatest { (start, end) -> financeRepo.savings(start, end) }
-    ) { p, e, s ->
-        MoneyState(p, e, s)
+        dateRange.flatMapLatest { (start, end) -> financeRepo.savings(start, end) },
+        financeRepo.expenses(Dates.startOfMonth(Dates.todayKey()), Dates.todayKey())
+    ) { p, e, s, mE ->
+        MoneyState(p, e, s, mE.sumOf { it.amount })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MoneyState())
 
     fun updateFilter(start: String?, end: String?) {
@@ -133,6 +135,13 @@ class MoneyViewModel @Inject constructor(
 
     fun deleteSaving(id: String) {
         viewModelScope.launch { runCatching { financeRepo.deleteSaving(id) } }
+    }
+    
+    fun updateMonthlyBudget(newBudget: Double) {
+        viewModelScope.launch {
+            val p = prefsRepo.getAppPrefs()
+            prefsRepo.updateAppPrefs(p.copy(monthlyBudget = newBudget))
+        }
     }
 }
 
@@ -327,6 +336,53 @@ fun MoneyContent(nav: NavController, modifier: Modifier = Modifier, vm: MoneyVie
             Spacer(Modifier.height(8.dp))
         }
 
+        var showBudgetDialog by remember { mutableStateOf(false) }
+
+        BloomCard(modifier = Modifier.clickable { showBudgetDialog = true }) {
+            Text("MONTHLY BUDGET", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Spent ${Format.money(s.monthlySpent, s.prefs.currency)} of ${Format.money(s.prefs.monthlyBudget, s.prefs.currency)}",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                Text(
+                    "${((s.monthlySpent / s.prefs.monthlyBudget.coerceAtLeast(1.0)) * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            GoalProgressBar(((s.monthlySpent / s.prefs.monthlyBudget.coerceAtLeast(1.0)) * 100).toInt().coerceIn(0, 100))
+        }
+
+        Spacer(Modifier.height(16.dp))
+        
+        if (showBudgetDialog) {
+            var budgetInput by remember { mutableStateOf(s.prefs.monthlyBudget.toString().removeSuffix(".0")) }
+            AlertDialog(
+                onDismissRequest = { showBudgetDialog = false },
+                title = { Text("Update Monthly Budget") },
+                text = {
+                    OutlinedTextField(
+                        value = budgetInput,
+                        onValueChange = { budgetInput = it.filter { c -> c.isDigit() || c == '.' } },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        prefix = { Text(s.prefs.currency + " ") }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        budgetInput.toDoubleOrNull()?.let { vm.updateMonthlyBudget(it) }
+                        showBudgetDialog = false
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showBudgetDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+
         // Quick Stats
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             StatCard("Spent today", Format.money(todayMoney.spent, s.prefs.currency), Modifier.weight(1f))
@@ -519,4 +575,6 @@ fun AddTransactionSheet(
             }
         }
     }
+
+    mobile.dairy.app.ui.components.GlobalLoadingOverlay(busy, "Saving transaction...")
 }

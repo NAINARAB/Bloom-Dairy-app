@@ -184,7 +184,7 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
             BloomCard {
                 SettingsMenuRow(
                     title = "Appearance",
-                    subtitle = "Theme and accent colors",
+                    subtitle = "Theme, fonts, and accent colors",
                     onClick = { nav.navigate(mobile.dairy.app.Routes.SETTINGS_APPEARANCE) }
                 )
                 Divider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

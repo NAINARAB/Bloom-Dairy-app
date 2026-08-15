@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CrisisAlert
+import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -152,6 +153,13 @@ fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: Insig
                     icon = Icons.Default.CrisisAlert,
                     label = "Goals & Tasks",
                     onClick = { nav.navigate(Routes.INSIGHTS_GOALS) }
+                )
+            }
+            item {
+                AppDrawerItem(
+                    icon = Icons.Default.QueryStats,
+                    label = "Digital Habits",
+                    onClick = { nav.navigate(Routes.INSIGHTS_DIGITAL_HABITS) }
                 )
             }
             item {

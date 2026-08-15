@@ -227,20 +227,7 @@ fun AuthScreen(vm: AuthViewModel = hiltViewModel()) {
         }
 
         // Smooth full-screen loading overlay
-        AnimatedVisibility(
-            visible = busy,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color.White)
-            }
-        }
+        mobile.dairy.app.ui.components.GlobalLoadingOverlay(busy, "Authenticating...")
     }
 }
 

@@ -584,6 +584,8 @@ fun NewGoalScreen(nav: NavController, vm: GoalsViewModel = hiltViewModel()) {
             Spacer(Modifier.height(48.dp))
         }
     }
+
+    mobile.dairy.app.ui.components.GlobalLoadingOverlay(busy, "Saving goal...")
 }
 
 @HiltViewModel
@@ -744,7 +746,7 @@ fun GoalDetailScreen(nav: NavController, id: String, vm: GoalDetailViewModel = h
     LaunchedEffect(id) { vm.load(id) }
 
     if (goal == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        mobile.dairy.app.ui.components.GlobalLoadingOverlay(true, "Loading goal...")
         return
     }
 
@@ -1276,6 +1278,8 @@ fun GoalDetailScreen(nav: NavController, id: String, vm: GoalDetailViewModel = h
             Spacer(Modifier.height(48.dp))
         }
     }
+
+    mobile.dairy.app.ui.components.GlobalLoadingOverlay(busy, "Updating goal...")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

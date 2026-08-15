@@ -175,11 +175,16 @@ data class AppPrefs(
     var theme: String = "system",        // system | light | dark
     var accent: String = "violet",       // violet | teal | rose | amber | sky
     var cardGradient: String = "midnight", // midnight | sunset | ocean | aurora | forest | berry | ember | royal
+    var fontSize: Int = 14,              // 12..18 px/sp
+    var boldText: Boolean = false,
     var currency: String = "INR",
     var dailyBudget: Double? = null,
+    var monthlyBudget: Double = 30000.0,
     var lockEnabled: Boolean = false,
     var privateNotifications: Boolean = false,
+    var enableMotivationalNotifications: Boolean = true,
     var screenTimeEnabled: Boolean = false,
+    var quoteIndices: Map<String, Int> = emptyMap(),
     var transactionCategories: List<CategoryDef> = listOf(
         CategoryDef("food", "Food & dining", "🍱"),
         CategoryDef("food-delivery", "Food delivery", "🛵"),

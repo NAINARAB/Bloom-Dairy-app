@@ -42,6 +42,7 @@ class RootViewModel @Inject constructor(
 
     val locked = MutableStateFlow(false)
     val globalLoading = MutableStateFlow(false)
+    val initialLoading = MutableStateFlow(true)
 
     fun setLoading(isLoading: Boolean) {
         globalLoading.value = isLoading
@@ -57,6 +58,9 @@ class RootViewModel @Inject constructor(
         viewModelScope.launch {
             // Ensure reminders exist on first launch.
             reminderScheduler.rescheduleAll()
+            // Dismiss initial loading after auth & initial state settle
+            kotlinx.coroutines.delay(600)
+            initialLoading.value = false
         }
     }
 

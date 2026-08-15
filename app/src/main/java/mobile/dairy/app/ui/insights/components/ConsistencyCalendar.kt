@@ -195,11 +195,11 @@ fun ConsistencyCalendar(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Text(
-                //     text = "GitHub-style Contribution Grid",
-                //     fontSize = 11.sp,
-                //     color = MaterialTheme.colorScheme.onSurfaceVariant
-                // )
+                Text(
+                    text = "Click the square",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically

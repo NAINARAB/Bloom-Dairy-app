@@ -60,16 +60,45 @@ object UsageStatsHelper {
             // End of day is start of next day
             val endMillis = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-            val stats = usm.queryAndAggregateUsageStats(startMillis, endMillis)
+            val events = usm.queryEvents(startMillis, endMillis)
+            val event = android.app.usage.UsageEvents.Event()
+            
+            val appUsageMap = mutableMapOf<String, Long>()
+            val appStartTimes = mutableMapOf<String, Long>()
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName
+                val timestamp = event.timeStamp
+                
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+                    appStartTimes[pkg] = timestamp
+                } else if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED || 
+                           event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_STOPPED) {
+                    appStartTimes[pkg]?.let { startTime ->
+                        val timeSpent = timestamp - startTime
+                        if (timeSpent > 0) {
+                            appUsageMap[pkg] = appUsageMap.getOrDefault(pkg, 0L) + timeSpent
+                        }
+                        appStartTimes.remove(pkg)
+                    }
+                }
+            }
+            
+            val currentMillis = System.currentTimeMillis()
+            val actualEndMillis = minOf(endMillis, currentMillis)
+            appStartTimes.forEach { (pkg, startTime) ->
+                val timeSpent = actualEndMillis - startTime
+                if (timeSpent > 0) {
+                    appUsageMap[pkg] = appUsageMap.getOrDefault(pkg, 0L) + timeSpent
+                }
+            }
             
             var totalMins = 0.0
             val appUsages = mutableListOf<AppUsage>()
 
-            stats.values.forEach { stat ->
-                val timeInForeground = stat.totalTimeInForeground
+            appUsageMap.forEach { (pkg, timeInForeground) ->
                 if (timeInForeground > 0) {
-                    val pkg = stat.packageName
-                    
                     // Filter out system launchers and the app itself (optional, but let's keep the app itself so they see it)
                     if (!launcherPackages.contains(pkg) && !pkg.contains("com.android.systemui") && !pkg.contains("launcher")) {
                         val minutes = timeInForeground / 1000.0 / 60.0

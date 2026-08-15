@@ -1,0 +1,120 @@
+{
+  "goals_reminder": [
+    "\"{goal_title}\" has been waiting quietly for {stale_days} days. What is one small action you can take tomorrow?",
+    "It's been {stale_days} days since you last touched \"{goal_title}\". Even ten minutes counts.",
+    "Your goal \"{goal_title}\" is still there for you. How about picking it up today?",
+    "Gentle reminder: Remember \"{goal_title}\"? It's been {stale_days} days. Can you spare 5 minutes for it?",
+    "A quick nudge: You haven't logged time for \"{goal_title}\" in {stale_days} days. Small steps lead to big wins.",
+    "Hey! \"{goal_title}\" has been waiting quietly for {stale_days} days. Don't let it fade away.",
+    "Just checking in. It's been {stale_days} days since you last touched \"{goal_title}\". A tiny step is better than no step."
+  ],
+  "goals_streak": [
+    "Wow! You have focused on your goals for {streak} consecutive days. Keep going.",
+    "Incredible. That's a {streak}-day goal streak. Momentum is building.",
+    "Keep it up! {streak} days in a row working on what matters. You're building a powerful habit.",
+    "Amazing consistency. You've shown up for your goals {streak} days straight. Consistency is key.",
+    "You're on fire! You have focused on your goals for {streak} consecutive days. Be proud of yourself.",
+    "You've shown up for your goals {streak} days straight. Don't break the chain."
+  ],
+  "goals_milestone": [
+    "Celebrate this: You reached {milestone}% of \"{goal_title}\". Steady steps, real progress.",
+    "Milestone reached! \"{goal_title}\" is now {milestone}% complete. Every bit counts.",
+    "Progress alert! You've crossed the {milestone}% mark on \"{goal_title}\". Keep that momentum going.",
+    "Awesome news: You reached {milestone}% of \"{goal_title}\". You are doing great.",
+    "Look how far you've come. \"{goal_title}\" is now {milestone}% complete. Take a moment to appreciate your effort."
+  ],
+  "money_avoided": [
+    "Smart move. You avoided {amount} in unnecessary spending today. Your future self thanks you.",
+    "Great choice. You kept {amount} in your pocket today. Small savings add up.",
+    "Well done. That's {amount} saved from unnecessary expenses. That's how wealth is built.",
+    "Financial win! You successfully resisted spending {amount} today. Keep up the discipline.",
+    "A mindful decision. You avoided {amount} in unnecessary spending today. Every rupee saved is a rupee earned."
+  ],
+  "money_trend": [
+    "Just noticing: Your {category} spending is higher than last week. Worth a quick look \u2014 no judgement.",
+    "A quick heads-up: You've spent more on {category} recently. Might be good to review your budget.",
+    "Something to look at: There's an uptick in your {category} expenses. Just keeping you informed.",
+    "An observation: We noticed a spike in {category} spending. Knowledge is power when managing money."
+  ],
+  "money_streak": [
+    "Excellent discipline. You stayed within your daily budget for {streak} days. That is real financial discipline.",
+    "Great financial control. That's a {streak}-day budget streak. Keep those good habits going.",
+    "On track! For {streak} days, you've respected your spending limits. You're in control of your finances.",
+    "Budget master. You stayed within your daily budget for {streak} days. This is how you reach your financial goals."
+  ],
+  "effort_hard_day": [
+    "Tough day? You made progress even though the day was difficult. That effort matters.",
+    "It's okay. Showing up on a hard day counts double. Well done for trying.",
+    "Rough one. Difficult day, real effort. That combination builds strength.",
+    "Breathe. You faced a hard day and still tried. Rest well tonight, you earned it."
+  ],
+  "effort_good_day": [
+    "What a day! A genuinely good day. Notice what made it work so you can repeat it.",
+    "Fantastic. Days like this are built by your choices. Enjoy it to the fullest.",
+    "Shining bright. You had a highly productive and positive day. Let this energy carry into tomorrow.",
+    "A great day. Everything seemed to click today. Take a moment to savor the feeling."
+  ],
+  "mood_pattern_positive": [
+    "Insight: \"{influencer}\" keeps showing up on your good days. More of that, when you can.",
+    "Pattern spotted: You seem to feel better when \"{influencer}\" is involved. Try to intentionally include this in your routine.",
+    "Interesting connection: \"{influencer}\" is a strong positive influence for you. Lean into what works.",
+    "Good to know: \"{influencer}\" keeps showing up on your good days. Keep surrounding yourself with positivity."
+  ],
+  "mood_pattern_negative": [
+    "Insight: \"{influencer}\" often appears on heavier days. Noticing the pattern is the first step \u2014 you decide what to do with it.",
+    "Pattern spotted: We've noticed a link between difficult days and \"{influencer}\". Just being aware gives you power.",
+    "Something to consider: \"{influencer}\" might be a source of friction. Maybe take a step back and reflect on this.",
+    "Gentle observation: \"{influencer}\" often appears on heavier days. No pressure, just food for thought."
+  ],
+  "screen_time_high": [
+    "Digital check: Your screen time increased today ({today_mins} vs your usual {avg_mins}). Consider keeping your phone away during your next focus session.",
+    "Screen time alert: You spent {today_mins} on your device, higher than your average of {avg_mins}. Maybe plan a digital detox tomorrow.",
+    "A quick heads-up: A bit more screen time than usual today ({today_mins}). Try reading a book or going for a walk instead.",
+    "Hey! Your screen time increased today ({today_mins} vs your usual {avg_mins}). Unplugging for a bit could do wonders."
+  ],
+  "general_motivation": [
+    "Remember: You are capable of amazing things. Keep pushing forward.",
+    "Thought of the day: Small daily improvements are the key to staggering long-term results. You've got this.",
+    "Just a reminder: Your potential is endless. Make today count.",
+    "Keep in mind: Every day is a second chance. Believe in yourself.",
+    "Stay strong: Don't stop until you're proud. Stay disciplined.",
+    "Focus: Focus on the step in front of you, not the whole staircase. Trust the process.",
+    "You don't have to be perfect to be amazing. Be unstoppable.",
+    "Believe you can and you're halfway there.",
+    "Doubt kills more dreams than failure ever will.",
+    "The best time to plant a tree was 20 years ago. The second best time is now.",
+    "\"The only way to do great work is to love what you do.\" - Steve Jobs",
+    "\"It does not matter how slowly you go as long as you do not stop.\" - Confucius",
+    "\"Success is not final, failure is not fatal: it is the courage to continue that counts.\" - Winston Churchill",
+    "\"The secret of getting ahead is getting started.\" - Mark Twain",
+    "\"Don't watch the clock; do what it does. Keep going.\" - Sam Levenson",
+    "\"The future belongs to those who believe in the beauty of their dreams.\" - Eleanor Roosevelt"
+  ],
+  "exit_questions": [
+    "Are you going to continue your goal progress today?",
+    "Taking a break, or are you ready to conquer one more small task?",
+    "Did you log all your mindful reflections before stepping away?",
+    "Every small step counts towards your dreams. Ready to call it a day?",
+    "Your goals are cheering for you! Are you sure you want to exit now?",
+    "Growth happens one moment at a time. Taking some time to recharge?",
+    "Have you checked in on your daily priorities before leaving?",
+    "A moment of reflection can change your whole day. Ready to wrap up?",
+    "Are you heading out, or would you like to record one more thought?",
+    "Consistency is your superpower. Done for this session?",
+    "You're doing fantastic today! Ready to take a well-deserved break?",
+    "Before you leave, have you celebrated your progress today?",
+    "Stepping away for now? Don't forget to keep your momentum going!",
+    "Are you sure you want to close? Your future self is cheering you on!",
+    "Taking a rest to come back stronger, or all done for the day?",
+    "Your journey matters. Are you ready to pause your progress for now?",
+    "One positive thought can shape your evening. Sure you want to exit?",
+    "Great things take time and patience. Leaving the app for now?",
+    "Did you hit all your milestones for today, or heading off to rest?",
+    "Taking time offline is great for mindfulness. Ready to exit?",
+    "Stay focused on what matters most! Leaving your session now?",
+    "Are you ready to step away and put your daily plans into action?",
+    "Your growth doesn't stop when you close the app. Ready to exit?",
+    "Remember why you started. Are you done reflecting for today?",
+    "Rest is part of the process. Ready to take a break from Bloom?"
+  ]
+}

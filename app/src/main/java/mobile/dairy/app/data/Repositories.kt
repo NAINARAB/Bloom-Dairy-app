@@ -417,9 +417,16 @@ class PrefsRepository @Inject constructor(private val paths: FirestorePaths) {
             }
             .catch { Log.e("Repo", "Error", it); emit(AppPrefs()) }
 
+    suspend fun getAppPrefs(): AppPrefs =
+        paths.col("prefs").document("app").get().await().toObject(AppPrefs::class.java) ?: AppPrefs()
+
+    suspend fun updateAppPrefs(prefs: AppPrefs) {
+        paths.col("prefs").document("app").set(prefs).await()
+    }
+
     suspend fun save(patch: Map<String, Any?>) {
         paths.col("prefs").document("app")
-            .set(patch, com.google.firebase.firestore.SetOptions.merge())
+            .set(patch, com.google.firebase.firestore.SetOptions.merge()).await()
     }
 
     suspend fun saveDeviceToken(token: String) {

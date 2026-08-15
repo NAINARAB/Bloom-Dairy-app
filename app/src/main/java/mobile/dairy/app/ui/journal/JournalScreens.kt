@@ -696,7 +696,10 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
         LaunchedEffect(Unit) { nav.popBackStack() }
         return
     }
-    if (!ready || loaded == null) return
+    if (!ready || loaded == null) {
+        mobile.dairy.app.ui.components.GlobalLoadingOverlay(true, "Loading entry...")
+        return
+    }
 
     var entry by remember(loaded) { mutableStateOf(loaded!!) }
     var rating by remember(loadedRating) { mutableStateOf(loadedRating ?: mobile.dairy.app.domain.DailyRating(date = date)) }
@@ -800,6 +803,8 @@ fun EntryEditorScreen(nav: NavController, date: String, vm: EntryEditorViewModel
             Spacer(Modifier.height(48.dp))
         }
     }
+
+    mobile.dairy.app.ui.components.GlobalLoadingOverlay(busy, "Saving entry...")
 }
 
 private fun JournalEntry.withPersonFeeling(index: Int, feeling: String): JournalEntry =

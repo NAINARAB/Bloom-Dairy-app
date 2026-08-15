@@ -43,8 +43,21 @@ import mobile.dairy.app.ui.onboarding.OnboardingScreen
 import mobile.dairy.app.ui.screentime.ScreenTimeScreen
 import mobile.dairy.app.ui.settings.SettingsScreen
 import mobile.dairy.app.ui.theme.BloomTheme
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() { // FragmentActivity: required by BiometricPrompt
@@ -70,6 +83,7 @@ object Routes {
     const val INSIGHTS = "insights"
     const val INSIGHTS_JOURNAL = "insights/journal"
     const val INSIGHTS_GOALS = "insights/goals"
+    const val INSIGHTS_DIGITAL_HABITS = "insights/digital-habits"
     const val SCREEN_TIME = "screen-time"
     const val CHECK_IN = "check-in"
     const val NEW_GOAL = "goal/new"
@@ -91,24 +105,35 @@ fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
     val prefs by vm.prefs.collectAsState()
     val onboarded by vm.onboarded.collectAsState()
     val locked by vm.locked.collectAsState()
+    val globalLoading by vm.globalLoading.collectAsState()
+    val initialLoading by vm.initialLoading.collectAsState()
 
-    BloomTheme(themeMode = prefs.theme, accentKey = prefs.accent) {
+    BloomTheme(
+        themeMode = prefs.theme,
+        accentKey = prefs.accent,
+        fontSize = prefs.fontSize,
+        boldText = prefs.boldText
+    ) {
         androidx.compose.material3.Surface(
             modifier = androidx.compose.ui.Modifier.fillMaxSize(),
             color = androidx.compose.material3.MaterialTheme.colorScheme.background
         ) {
-            when {
-                user == null -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { AuthScreen() }
-                locked && prefs.lockEnabled -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { LockScreen(onUnlocked = vm::unlock) }
-                !onboarded -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { OnboardingScreen() }
-                else -> {
-                    Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { 
-                        BloomNavHost() 
-                        
-                        val globalLoading by vm.globalLoading.collectAsState()
-                        mobile.dairy.app.ui.components.GlobalLoadingOverlay(globalLoading)
+            Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                when {
+                    user == null -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { AuthScreen() }
+                    locked && prefs.lockEnabled -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { LockScreen(onUnlocked = vm::unlock) }
+                    !onboarded -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { OnboardingScreen() }
+                    else -> {
+                        Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { 
+                            BloomNavHost() 
+                        }
                     }
                 }
+                
+                mobile.dairy.app.ui.components.GlobalLoadingOverlay(
+                    isLoading = globalLoading || initialLoading,
+                    message = if (initialLoading) "Starting Bloom..." else "Syncing..."
+                )
             }
         }
     }
@@ -141,18 +166,88 @@ fun BloomNavHost() {
         composable(Routes.SETTINGS_PRIVACY) { mobile.dairy.app.ui.settings.PrivacySettingsScreen(nav) }
         composable(Routes.INSIGHTS_JOURNAL) { mobile.dairy.app.ui.insights.reports.JournalReportsScreen(nav) }
         composable(Routes.INSIGHTS_GOALS) { mobile.dairy.app.ui.insights.reports.GoalReportsScreen(nav) }
+        composable(Routes.INSIGHTS_DIGITAL_HABITS) { mobile.dairy.app.ui.insights.reports.DigitalHabitsScreen(nav) }
     }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(rootNav: androidx.navigation.NavController) {
-    val initialPage = remember { TABS.indexOfFirst { it.route == Routes.HOME }.takeIf { it >= 0 } ?: 0 }
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val homePageIndex = remember { TABS.indexOfFirst { it.route == Routes.HOME }.takeIf { it >= 0 } ?: 0 }
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-        initialPage = initialPage,
+        initialPage = homePageIndex,
         pageCount = { TABS.size }
     )
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    val exitQuestions = remember {
+        try {
+            val jsonString = context.assets.open("quotes.json").bufferedReader().use { it.readText() }
+            val jsonObject = JSONObject(jsonString)
+            val array = jsonObject.optJSONArray("exit_questions")
+            if (array != null && array.length() > 0) {
+                List(array.length()) { i -> array.getString(i) }
+            } else {
+                listOf("Are you going to continue your goal progress today?")
+            }
+        } catch (e: Exception) {
+            listOf("Are you going to continue your goal progress today?")
+        }
+    }
+
+    var showExitDialog by remember { mutableStateOf(false) }
+    var currentExitQuestion by remember { mutableStateOf("") }
+
+    BackHandler {
+        if (pagerState.currentPage != homePageIndex) {
+            coroutineScope.launch {
+                pagerState.animateScrollToPage(homePageIndex)
+            }
+        } else {
+            currentExitQuestion = exitQuestions.randomOrNull() ?: "Are you going to continue your goal progress today?"
+            showExitDialog = true
+        }
+    }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = {
+                Text("🌱 Pause Your Progress?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    currentExitQuestion,
+                    style = MaterialTheme.typography.bodyLarge,
+                    lineHeight = 22.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitDialog = false
+                        activity?.finish()
+                    }
+                ) {
+                    Text("Exit App", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showExitDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Stay & Grow", fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
 
     Scaffold(
         bottomBar = {
