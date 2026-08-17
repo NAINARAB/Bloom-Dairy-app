@@ -76,6 +76,7 @@ class MainActivity : FragmentActivity() { // FragmentActivity: required by Biome
 object Routes {
     const val AUTH = "auth"
     const val TOUR = "tour"
+    const val INFO = "info"
     const val HOME = "home"
     const val JOURNAL = "journal"
     const val GOALS = "goals"
@@ -167,6 +168,7 @@ fun BloomNavHost(vm: RootViewModel) {
                 nav.popBackStack()
             }
         }
+        composable(Routes.INFO) { mobile.dairy.app.ui.info.DoYouKnowScreen(nav) }
         composable(Routes.SETTINGS) { SettingsScreen(nav) }
         composable(Routes.SETTINGS_APPEARANCE) { mobile.dairy.app.ui.settings.AppearanceSettingsScreen(nav) }
         composable(Routes.SETTINGS_CATEGORIES) { mobile.dairy.app.ui.settings.CategorySettingsScreen(nav) }

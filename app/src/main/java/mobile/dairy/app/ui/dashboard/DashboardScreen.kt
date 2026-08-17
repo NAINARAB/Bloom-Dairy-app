@@ -320,7 +320,7 @@ fun DashboardContent(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(
-                            onClick = { nav.navigate(Routes.TOUR) },
+                            onClick = { nav.navigate(Routes.INFO) },
                             modifier = Modifier
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), CircleShape)
                         ) {
