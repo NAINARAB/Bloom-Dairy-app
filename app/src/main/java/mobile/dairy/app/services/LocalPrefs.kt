@@ -84,7 +84,6 @@ class LocalPrefs @Inject constructor(@ApplicationContext private val context: Co
     private val json = Json { ignoreUnknownKeys = true }
     private val reminderKey = stringPreferencesKey("reminder_settings")
     private val draftKey = stringPreferencesKey("checkin_draft")
-    private val onboardedKey = booleanPreferencesKey("onboarded")
     private val onlineModeKey = booleanPreferencesKey("online_mode")
 
     val reminderSettings: Flow<ReminderSettings> = context.dataStore.data.map { p ->
@@ -110,13 +109,25 @@ class LocalPrefs @Inject constructor(@ApplicationContext private val context: Co
         context.dataStore.edit { it.remove(draftKey) }
     }
 
+    val isOnlineMode: Flow<Boolean> = context.dataStore.data.map { it[onlineModeKey] ?: true } // Default true for legacy users
+
+    private val onboardedKey = androidx.datastore.preferences.core.booleanPreferencesKey("onboarded")
     val onboarded: Flow<Boolean> = context.dataStore.data.map { it[onboardedKey] ?: false }
 
     suspend fun setOnboarded() {
         context.dataStore.edit { it[onboardedKey] = true }
     }
 
-    val isOnlineMode: Flow<Boolean> = context.dataStore.data.map { it[onlineModeKey] ?: true } // Default true for legacy users
+    private val hasSeenTourKey = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_tour")
+    val hasSeenTour: Flow<Boolean> = context.dataStore.data.map { it[hasSeenTourKey] ?: false }
+
+    suspend fun setHasSeenTour() {
+        context.dataStore.edit { it[hasSeenTourKey] = true }
+    }
+
+    suspend fun resetHasSeenTour() {
+        context.dataStore.edit { it[hasSeenTourKey] = false }
+    }
 
     suspend fun setOnlineMode(online: Boolean) {
         context.dataStore.edit { it[onlineModeKey] = online }

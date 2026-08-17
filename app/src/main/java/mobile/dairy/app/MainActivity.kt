@@ -75,7 +75,7 @@ class MainActivity : FragmentActivity() { // FragmentActivity: required by Biome
 
 object Routes {
     const val AUTH = "auth"
-    const val ONBOARDING = "onboarding"
+    const val TOUR = "tour"
     const val HOME = "home"
     const val JOURNAL = "journal"
     const val GOALS = "goals"
@@ -107,6 +107,7 @@ fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
     val activeLocalUserId by vm.activeLocalUserId.collectAsState()
     val prefs by vm.prefs.collectAsState()
     val onboarded by vm.onboarded.collectAsState()
+    val hasSeenTour by vm.hasSeenTour.collectAsState()
     val onlineMode by vm.onlineMode.collectAsState()
     val locked by vm.locked.collectAsState()
     val globalLoading by vm.globalLoading.collectAsState()
@@ -129,7 +130,7 @@ fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
                     (onlineMode && user == null) || (!onlineMode && activeLocalUserId == null) -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { AuthScreen() }
                     else -> {
                         Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { 
-                            BloomNavHost() 
+                            BloomNavHost(vm) 
                         }
                     }
                 }
@@ -144,10 +145,10 @@ fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun BloomNavHost() {
+fun BloomNavHost(vm: RootViewModel) {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "main") {
-        composable("main") { MainScreen(nav) }
+        composable("main") { MainScreen(nav, vm) }
         composable(Routes.CHECK_IN) { CheckInScreen(nav) }
         composable(Routes.NEW_GOAL) { NewGoalScreen(nav) }
         composable(
@@ -156,13 +157,16 @@ fun BloomNavHost() {
         ) { back ->
             GoalDetailScreen(nav, back.arguments?.getString("id") ?: "")
         }
-        composable(
-            Routes.ENTRY,
-            arguments = listOf(navArgument("date") { defaultValue = "" }),
-        ) { back ->
+        composable(Routes.ENTRY, arguments = listOf(navArgument("date") { defaultValue = "" })) { back ->
             EntryEditorScreen(nav, back.arguments?.getString("date") ?: "")
         }
         composable(Routes.SCREEN_TIME) { ScreenTimeScreen(nav) }
+        composable(Routes.TOUR) { 
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                vm.resetTour()
+                nav.popBackStack()
+            }
+        }
         composable(Routes.SETTINGS) { SettingsScreen(nav) }
         composable(Routes.SETTINGS_APPEARANCE) { mobile.dairy.app.ui.settings.AppearanceSettingsScreen(nav) }
         composable(Routes.SETTINGS_CATEGORIES) { mobile.dairy.app.ui.settings.CategorySettingsScreen(nav) }
@@ -178,9 +182,10 @@ fun BloomNavHost() {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun MainScreen(rootNav: androidx.navigation.NavController) {
+fun MainScreen(rootNav: androidx.navigation.NavController, vm: RootViewModel) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val hasSeenTour by vm.hasSeenTour.collectAsState()
     val homePageIndex = remember { TABS.indexOfFirst { it.route == Routes.HOME }.takeIf { it >= 0 } ?: 0 }
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
         initialPage = homePageIndex,
@@ -290,6 +295,13 @@ fun MainScreen(rootNav: androidx.navigation.NavController) {
                 Routes.MONEY -> mobile.dairy.app.ui.money.MoneyContent(rootNav, modifier)
                 Routes.INSIGHTS -> mobile.dairy.app.ui.insights.InsightsContent(rootNav, modifier)
             }
+        }
+        
+        if (!hasSeenTour) {
+            mobile.dairy.app.ui.onboarding.InAppTourOverlay(
+                pagerState = pagerState,
+                onFinish = { vm.finishTour() }
+            )
         }
     }
 }

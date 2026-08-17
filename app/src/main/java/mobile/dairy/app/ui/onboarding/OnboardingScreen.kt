@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.FilterCenterFocus
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,14 +67,11 @@ class OnboardingViewModel @Inject constructor(
 private data class Slide(val icon: ImageVector, val title: String, val body: String)
 
 private val SLIDES = listOf(
-    Slide(Icons.AutoMirrored.Filled.MenuBook, "A diary that helps you grow",
-        "Two quiet minutes a day: your mood, your wins, your lessons. Bloom turns them into gentle, judgement-free insights."),
-    Slide(Icons.Default.FilterCenterFocus, "Goals with honest progress",
-        "Track short and long-term goals with milestones, minutes, and effort — and get encouragement exactly when a day was hard."),
-    Slide(Icons.Default.AccountBalanceWallet, "Money awareness, not guilt",
-        "Log what you spent, saved, and deliberately avoided. Watch your \u201Cavoided spending\u201D grow into real savings."),
-    Slide(Icons.Default.Lock, "Private by design",
-        "Your entries live in your own account, protected by security rules and an optional biometric lock. Notifications can hide all content."),
+    Slide(Icons.AutoMirrored.Filled.MenuBook, "A diary that helps you grow", "Two quiet minutes a day: your mood, your wins, your lessons. Bloom turns them into gentle, judgement-free insights."),
+    Slide(Icons.Default.FilterCenterFocus, "Goals with honest progress", "Track short and long-term goals with milestones, minutes, and effort — and get encouragement exactly when a day was hard."),
+    Slide(Icons.Default.AccountBalanceWallet, "Money awareness, not guilt", "Log what you spent, saved, and deliberately avoided. Watch your “avoided spending” grow into real savings."),
+    Slide(Icons.Default.Sync, "Sync / Offline", "Sync data securely, or use completely offline."),
+    Slide(Icons.Default.Lock, "Private by design", "Your entries live in your own account, protected by security rules and an optional biometric lock. Notifications can hide all content.")
 )
 
 @Composable
@@ -81,14 +79,6 @@ fun OnboardingScreen(vm: OnboardingViewModel = hiltViewModel()) {
     val pager = rememberPagerState { SLIDES.size }
     val scope = rememberCoroutineScope()
     val isLast = pager.currentPage == SLIDES.size - 1
-
-    val permissionLauncherOffline = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ -> vm.finish(false) }
-
-    val permissionLauncherOnline = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ -> vm.finish(true) }
 
     Column(Modifier.fillMaxSize()) {
         HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
@@ -151,28 +141,9 @@ fun OnboardingScreen(vm: OnboardingViewModel = hiltViewModel()) {
                 ) { Text("Next") }
             } else {
                 Button(
-                    onClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            permissionLauncherOffline.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            vm.finish(false)
-                        }
-                    },
+                    onClick = { vm.finish(true) },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Start Offline Mode (No Account Needed)") }
-                
-                Spacer(Modifier.height(8.dp))
-                
-                androidx.compose.material3.OutlinedButton(
-                    onClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            permissionLauncherOnline.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            vm.finish(true)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Start Online Mode (Sync to Cloud)") }
+                ) { Text("Get Started") }
             }
             Spacer(Modifier.height(10.dp))
         }

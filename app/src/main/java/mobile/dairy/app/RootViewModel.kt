@@ -53,6 +53,9 @@ class RootViewModel @Inject constructor(
     val onlineMode = localPrefs.isOnlineMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val hasSeenTour = localPrefs.hasSeenTour
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val locked = MutableStateFlow(false)
     val globalLoading = MutableStateFlow(false)
     val initialLoading = MutableStateFlow(true)
@@ -103,6 +106,8 @@ class RootViewModel @Inject constructor(
     }
 
     fun unlock() { locked.value = false }
+    fun finishTour() { viewModelScope.launch { localPrefs.setHasSeenTour() } }
+    fun resetTour() { viewModelScope.launch { localPrefs.resetHasSeenTour() } }
     fun signOut() {
         viewModelScope.launch {
             localPrefs.setActiveLocalUserId(null)

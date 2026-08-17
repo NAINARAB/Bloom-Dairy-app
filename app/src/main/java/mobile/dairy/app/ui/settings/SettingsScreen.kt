@@ -300,6 +300,12 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
                     subtitle = "Manage your daily reminders",
                     onClick = { nav.navigate(mobile.dairy.app.Routes.SETTINGS_PRIVACY) }
                 )
+                Divider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SettingsMenuRow(
+                    title = "Take a Tour",
+                    subtitle = "Revisit the app features overview",
+                    onClick = { nav.navigate(mobile.dairy.app.Routes.TOUR) }
+                )
             }
 
             Spacer(Modifier.height(32.dp))
