@@ -1,6 +1,7 @@
 package mobile.dairy.app.ui.goals
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterCenterFocus
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.filled.KeyboardOptionKey
 import androidx.compose.material.icons.filled.List
@@ -112,10 +113,11 @@ class GoalsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val filter = MutableStateFlow("active")
-    val startDate = MutableStateFlow<String?>(Dates.addDays(Dates.todayKey(), -7))
-    val endDate = MutableStateFlow<String?>(Dates.todayKey())
 
     val goals = goalRepo.goals(listOf("active", "completed", "paused", "archived"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        
+    val todayUpdates = goalRepo.updateLog(Dates.todayKey(), Dates.todayKey())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val busy = MutableStateFlow(false)
@@ -128,12 +130,20 @@ class GoalsViewModel @Inject constructor(
             onDone()
         }
     }
+    
+    fun logUpdate(g: Goal, u: GoalUpdate) {
+        viewModelScope.launch {
+            busy.value = true
+            runCatching { goalRepo.addUpdate(g, u) }
+            busy.value = false
+        }
+    }
 }
 
 private val PRIORITY_ICON = mapOf(
     "high" to Icons.Default.KeyboardDoubleArrowUp,
     "medium" to Icons.Default.KeyboardOptionKey,
-    "low" to Icons.Default.Circle
+    "low" to Icons.Default.KeyboardArrowDown
 )
 private val PRIORITY_COLOR = mapOf(
     "high" to Color(0xFFD45B50),
@@ -152,62 +162,26 @@ fun GoalsScreen(nav: NavController) {
 fun GoalsContent(nav: NavController, modifier: Modifier = Modifier, vm: GoalsViewModel = hiltViewModel()) {
     val allGoals by vm.goals.collectAsState()
     val filter by vm.filter.collectAsState()
-    val startFilter by vm.startDate.collectAsState()
-    val endFilter by vm.endDate.collectAsState()
+    val todayUpdates by vm.todayUpdates.collectAsState()
 
-    var showFilterDialog by remember { mutableStateOf(false) }
-    var quickRange by remember { mutableStateOf("week") }
+    var goalToUpdate by remember { mutableStateOf<Goal?>(null) }
+    
+    val priorityOrder = mapOf("high" to 0, "medium" to 1, "low" to 2)
 
     val filtered = allGoals.filter { g ->
-        if (g.status != filter) return@filter false
-        val s = startFilter
-        val e = endFilter
-        if (s != null && e != null) {
-            val createdKey = Dates.fromMillis(g.createdAt)
-            if (createdKey < s || createdKey > e) return@filter false
-        }
-        true
-    }
+        g.status == filter
+    }.sortedBy { priorityOrder[it.priority] ?: 3 }
 
-    if (showFilterDialog) {
-        mobile.dairy.app.ui.components.GlobalFilterDialog(
-            initialStartDate = startFilter,
-            initialEndDate = endFilter,
-            initialQuickRange = quickRange,
-            onDismiss = { showFilterDialog = false },
-            onApply = { range, start, end ->
-                quickRange = range
-                showFilterDialog = false
-                val effectiveStart = when(range) {
-                    "today" -> Dates.todayKey()
-                    "week" -> Dates.addDays(Dates.todayKey(), -7)
-                    "month" -> Dates.addDays(Dates.todayKey(), -30)
-                    "custom" -> start
-                    else -> null
-                }
-                val effectiveEnd = if (range == "custom") end else Dates.todayKey()
-                vm.startDate.value = effectiveStart
-                vm.endDate.value = effectiveEnd
+    if (goalToUpdate != null) {
+        GoalUpdateDialog(
+            goal = goalToUpdate!!,
+            initialUpdate = null,
+            onDismiss = { goalToUpdate = null },
+            onSave = { update ->
+                vm.logUpdate(goalToUpdate!!, update)
+                goalToUpdate = null
             }
-        ) {
-            mobile.dairy.app.ui.components.WrapChips {
-                androidx.compose.material3.FilterChip(
-                    selected = filter == "active",
-                    onClick = { vm.filter.value = "active" },
-                    label = { Text("Active") }
-                )
-                androidx.compose.material3.FilterChip(
-                    selected = filter == "completed",
-                    onClick = { vm.filter.value = "completed" },
-                    label = { Text("Done") }
-                )
-                androidx.compose.material3.FilterChip(
-                    selected = filter == "paused",
-                    onClick = { vm.filter.value = "paused" },
-                    label = { Text("Paused") }
-                )
-            }
-        }
+        )
     }
 
     Column(
@@ -219,28 +193,35 @@ fun GoalsContent(nav: NavController, modifier: Modifier = Modifier, vm: GoalsVie
         Spacer(Modifier.height(28.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Goals", style = MaterialTheme.typography.displaySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(
-                    onClick = { showFilterDialog = true },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                ) {
-                    Icon(Icons.Default.FilterList, contentDescription = "Filters", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Button(
-                    onClick = { nav.navigate(Routes.NEW_GOAL) },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("+ New", fontWeight = FontWeight.Bold)
-                }
+            Button(
+                onClick = { nav.navigate(Routes.NEW_GOAL) },
+                modifier = Modifier.height(40.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("+ New", fontWeight = FontWeight.Bold)
             }
         }
         
         Spacer(Modifier.height(16.dp))
-        if (quickRange == "custom" && startFilter != null) {
-            Text("$startFilter to $endFilter", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(8.dp))
+        
+        mobile.dairy.app.ui.components.WrapChips {
+            androidx.compose.material3.FilterChip(
+                selected = filter == "active",
+                onClick = { vm.filter.value = "active" },
+                label = { Text("Active") }
+            )
+            androidx.compose.material3.FilterChip(
+                selected = filter == "completed",
+                onClick = { vm.filter.value = "completed" },
+                label = { Text("Done") }
+            )
+            androidx.compose.material3.FilterChip(
+                selected = filter == "paused",
+                onClick = { vm.filter.value = "paused" },
+                label = { Text("Paused") }
+            )
         }
-
+        
         Spacer(Modifier.height(24.dp))
 
         if (filtered.isEmpty()) {
@@ -251,78 +232,102 @@ fun GoalsContent(nav: NavController, modifier: Modifier = Modifier, vm: GoalsVie
             )
         } else {
             filtered.forEach { goal ->
+                val hasUpdatedToday = todayUpdates.any { it.goalId == goal.id }
                 BloomCard(
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    modifier = Modifier.padding(bottom = 16.dp).let {
+                        if (hasUpdatedToday) {
+                            it.background(BloomColors.success().copy(alpha = 0.1f), RoundedCornerShape(20.dp))
+                              .border(1.dp, BloomColors.success().copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                        } else it
+                    },
                     onClick = { nav.navigate(Routes.goal(goal.id)) }
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
-                            Icon(
-                                PRIORITY_ICON[goal.priority] ?: Icons.Default.Circle,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp).padding(top = 2.dp),
-                                tint = PRIORITY_COLOR[goal.priority] ?: MaterialTheme.colorScheme.outline
-                            )
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(goal.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                    Box(
-                                        Modifier
-                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            if (goal.type == "short") "Short-Term" else "Long-Term",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    PRIORITY_ICON[goal.priority] ?: Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = PRIORITY_COLOR[goal.priority] ?: MaterialTheme.colorScheme.outline
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(goal.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        if (goal.type == "short") "Short-Term" else "Long-Term",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
                                 }
-                                
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+                            }
+                        }
+                        
+                        Spacer(Modifier.height(12.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
                                 val deadlineText = goal.deadline?.let { deadlineKey ->
                                     try {
                                         val diff = Dates.daysBetween(Dates.todayKey(), deadlineKey)
                                         when {
-                                            diff > 0 -> " \u00B7 $diff days left"
-                                            diff == 0L -> " \u00B7 due today"
-                                            else -> " \u00B7 ${-diff} days overdue"
+                                            diff > 0 -> "$diff days left"
+                                            diff == 0L -> "due today"
+                                            else -> "${-diff} days overdue"
                                         }
                                     } catch (e: Exception) {
-                                        " \u00B7 due $deadlineKey"
+                                        "due $deadlineKey"
                                     }
-                                } ?: ""
+                                } ?: "No deadline"
                                 val isOverdue = goal.deadline?.let { Dates.daysBetween(Dates.todayKey(), it) } ?: 0L < 0L
                                 Text(
-                                    "${goal.priority.replaceFirstChar { it.uppercase() }} Priority" + deadlineText,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    deadlineText,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 
                                 if (goal.milestones.isNotEmpty() || goal.dailyTasks.isNotEmpty()) {
-                                    Spacer(Modifier.height(6.dp))
+                                    Spacer(Modifier.height(2.dp))
                                     Text(
-                                        "${goal.milestones.count { it.done }}/${goal.milestones.size} milestones · ${goal.dailyTasks.count { it.done }}/${goal.dailyTasks.size} daily tasks",
+                                        "${goal.milestones.count { it.done }}/${goal.milestones.size} milestones · ${goal.dailyTasks.count { it.done }}/${goal.dailyTasks.size} tasks",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-
-                                Spacer(Modifier.height(16.dp))
-                                GoalProgressBar(goal.progress, color = if (goal.status == "completed") BloomColors.success() else MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.height(8.dp))
-                                Text("${goal.progress}% complete", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                            
+                            androidx.compose.material3.IconButton(
+                                onClick = { goalToUpdate = goal },
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                                    .size(40.dp)
+                            ) {
+                                Icon(Icons.Default.TrendingUp, contentDescription = "Log Progress", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+
+                        Spacer(Modifier.height(16.dp))
+                        GoalProgressBar(goal.progress, color = if (goal.status == "completed") BloomColors.success() else MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("${goal.progress}% complete", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            if (hasUpdatedToday) {
+                                Text("🎉 Updated Today", style = MaterialTheme.typography.labelSmall, color = BloomColors.success(), fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
-                }
             }
         }
+    }
         
-        Spacer(Modifier.height(32.dp))
+    Spacer(Modifier.height(32.dp))
     }
 }
 

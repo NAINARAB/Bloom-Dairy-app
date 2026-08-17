@@ -57,9 +57,9 @@ fun LockScreen(onUnlocked: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
 
-    // If biometrics were removed since the lock was enabled, never brick the diary.
+    // Always attempt to show the prompt. Android's BiometricPrompt handles PIN fallbacks automatically.
     LaunchedEffect(Unit) {
-        if (activity == null || !canUseBiometrics(context)) onUnlocked()
+        if (activity == null) onUnlocked()
         else showPrompt(activity, onUnlocked)
     }
 

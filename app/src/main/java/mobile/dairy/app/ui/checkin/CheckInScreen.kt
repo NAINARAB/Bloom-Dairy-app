@@ -151,6 +151,14 @@ class CheckInViewModel @Inject constructor(
         viewModelScope.launch { runCatching { localPrefs.saveDraft(draft.value) } }
     }
 
+    fun clearDraft() {
+        viewModelScope.launch {
+            val emptyDraft = CheckinDraft(date = today)
+            localPrefs.saveDraft(emptyDraft)
+            draft.value = emptyDraft
+        }
+    }
+
     fun finish() {
         if (saving.value) return
         saving.value = true
@@ -328,7 +336,10 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { nav.popBackStack() }) {
+                    IconButton(onClick = { 
+                        vm.clearDraft()
+                        nav.popBackStack() 
+                    }) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                     
@@ -347,7 +358,10 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                         }
                     }
 
-                    TextButton(onClick = { nav.popBackStack() }) {
+                    TextButton(onClick = { 
+                        vm.clearDraft()
+                        nav.popBackStack() 
+                    }) {
                         Text("Save later", style = MaterialTheme.typography.labelSmall)
                     }
                 }
@@ -369,6 +383,27 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                 }
                 
                 val isLast = pager.currentPage == activeQuestions.size - 1
+                val currentQ = activeQuestions.getOrNull(pager.currentPage)
+                val isNextEnabled = if (currentQ?.isMandatory == true) {
+                    when (currentQ.id) {
+                        "q_feeling" -> draft.moods.isNotEmpty()
+                        "q_feeling_reason" -> draft.moodCauses.isNotEmpty()
+                        "q_people" -> draft.people.isNotEmpty()
+                        "q_best_part" -> draft.bestPart.isNotBlank()
+                        "q_hardest_part" -> draft.hardestPart.isNotBlank()
+                        "q_good_things" -> draft.goodThings.isNotBlank()
+                        "q_mistakes" -> draft.mistakes.isNotBlank()
+                        "q_lessons" -> draft.lessons.isNotBlank()
+                        "q_gratitude" -> draft.gratitude.isNotEmpty()
+                        "q_good_decision" -> draft.goodDecision.isNotBlank()
+                        "q_improve_tomorrow" -> draft.improvement.isNotBlank()
+                        "q_rating_performance" -> draft.productivity != null || draft.focus != null || draft.discipline != null || draft.goalEffort != null || draft.financialDiscipline != null
+                        "q_rating_wellbeing" -> draft.overall != null || draft.energy != null || draft.happiness != null || draft.stress != null || draft.sleep != null
+                        "q_anything_else" -> draft.note.isNotBlank()
+                        else -> if (currentQ.isCustom) !draft.customAnswers[currentQ.id].isNullOrBlank() else true
+                    }
+                } else true
+                
                 Button(
                     onClick = {
                         focusManager.clearFocus()
@@ -380,7 +415,7 @@ fun CheckInScreen(nav: NavController, vm: CheckInViewModel = hiltViewModel()) {
                     },
                     modifier = Modifier.weight(2f).height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    enabled = !saving
+                    enabled = !saving && isNextEnabled
                 ) {
                     Text(
                         if (saving) "Saving..." 

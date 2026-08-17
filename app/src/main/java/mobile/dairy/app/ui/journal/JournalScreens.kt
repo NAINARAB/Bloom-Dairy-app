@@ -186,12 +186,12 @@ fun JournalContent(nav: NavController, modifier: Modifier = Modifier, vm: Journa
     var query by rememberSaveable { mutableStateOf("") }
     var moodFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
-    var startDate by rememberSaveable { mutableStateOf<String?>(null) }
-    var endDate by rememberSaveable { mutableStateOf<String?>(null) }
+    var startDate by rememberSaveable { mutableStateOf<String?>(Dates.addDays(Dates.todayKey(), -7)) }
+    var endDate by rememberSaveable { mutableStateOf<String?>(Dates.todayKey()) }
     var showFilterDialog by remember { mutableStateOf(false) }
     
     // Quick Range state
-    var quickRange by rememberSaveable { mutableStateOf("all") } // all | week | month | custom
+    var quickRange by rememberSaveable { mutableStateOf("week") } // all | week | month | custom
 
     // Field-specific filters
     var filterMistakes by rememberSaveable { mutableStateOf(false) }

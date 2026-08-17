@@ -27,6 +27,7 @@ class AuthRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val paths: FirestorePaths,
     private val functions: FirebaseFunctions,
+    private val database: AppDatabase,
 ) {
     val currentUser: FirebaseUser? get() = auth.currentUser
 
@@ -82,7 +83,9 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    fun signOut() = auth.signOut()
+    suspend fun signOut() {
+        auth.signOut()
+    }
 
     private suspend fun ensureUserDoc(user: FirebaseUser?) {
         val u = user ?: return

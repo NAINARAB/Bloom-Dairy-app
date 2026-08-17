@@ -163,8 +163,8 @@ fun MoneyContent(nav: NavController, modifier: Modifier = Modifier, vm: MoneyVie
     var deleteConfirmSaving by remember { mutableStateOf<Saving?>(null) }
     
     // Filters
-    var quickRange by remember { mutableStateOf("month") }
-    var startDate by remember { mutableStateOf<String?>(Dates.startOfMonth(Dates.todayKey())) }
+    var quickRange by remember { mutableStateOf("week") }
+    var startDate by remember { mutableStateOf<String?>(Dates.addDays(Dates.todayKey(), -7)) }
     var endDate by remember { mutableStateOf<String?>(Dates.todayKey()) }
     var filterCategory by remember { mutableStateOf<String?>(null) }
     var filterType by remember { mutableStateOf<String?>(null) } // "expense", "saving"

@@ -166,14 +166,14 @@ fun InsightsContent(nav: NavController, modifier: Modifier = Modifier, vm: Insig
                 AppDrawerItem(
                     icon = Icons.Default.AttachMoney,
                     label = "Money & Savings",
-                    onClick = { /* nav.navigate(Routes.INSIGHTS_FINANCE) */ }
+                    onClick = { nav.navigate(Routes.INSIGHTS_FINANCE) }
                 )
             }
             item {
                 AppDrawerItem(
                     icon = Icons.Default.BarChart,
                     label = "Holistic Data",
-                    onClick = { /* nav.navigate(Routes.INSIGHTS_HOLISTIC) */ }
+                    onClick = { nav.navigate(Routes.INSIGHTS_HOLISTIC) }
                 )
             }
         }

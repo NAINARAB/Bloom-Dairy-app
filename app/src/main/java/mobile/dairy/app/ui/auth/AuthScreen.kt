@@ -1,10 +1,6 @@
 package mobile.dairy.app.ui.auth
 
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -24,16 +19,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -44,15 +36,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import mobile.dairy.app.R
 import mobile.dairy.app.data.AuthRepository
+import mobile.dairy.app.data.AppDatabase
+import mobile.dairy.app.data.newId
+import mobile.dairy.app.domain.LocalUser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.security.MessageDigest
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val localPrefs: mobile.dairy.app.services.LocalPrefs,
+    private val database: AppDatabase,
 ) : ViewModel() {
 
     val busy = MutableStateFlow(false)
@@ -77,9 +76,41 @@ class AuthViewModel @Inject constructor(
     fun signUp(name: String, email: String, password: String) = run { authRepository.signUp(name, email, password) }
     fun reset(email: String) = run { authRepository.sendReset(email); resetSent.value = true }
     fun google(context: Context, webClientId: String) = run { authRepository.signInWithGoogle(context, webClientId) }
+    
+    private fun hash(text: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    fun localSignUp(name: String, phone: String, pass: String) = run {
+        val id = newId()
+        database.localUserDao().upsertLocalUser(
+            LocalUser(
+                id = id,
+                name = name.trim(),
+                phone = phone.trim(),
+                passwordHash = hash(pass),
+                firebaseUid = null,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+        localPrefs.setActiveLocalUserId(id)
+        localPrefs.setOnlineMode(false)
+    }
+
+    fun localSignIn(phone: String, pass: String) = run {
+        val users = database.localUserDao().getAllLocalUsers().firstOrNull() ?: emptyList()
+        val user = users.find { it.phone == phone.trim() }
+        if (user != null && user.passwordHash == hash(pass)) {
+            localPrefs.setActiveLocalUserId(user.id)
+            localPrefs.setOnlineMode(false)
+        } else {
+            error.value = "Incorrect phone number or password."
+        }
+    }
 }
 
-private enum class Mode { WELCOME, SIGN_IN, SIGN_UP, RESET }
+private enum class Mode { WELCOME, SIGN_IN, SIGN_UP, RESET, OFFLINE_SIGN_IN, OFFLINE_SIGN_UP }
 
 @Composable
 fun AuthScreen(vm: AuthViewModel = hiltViewModel()) {
@@ -92,10 +123,12 @@ fun AuthScreen(vm: AuthViewModel = hiltViewModel()) {
 
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
 
     fun validEmail() = Regex("^\\S+@\\S+\\.\\S+$").matches(email.trim())
+    fun validPhone() = phone.trim().length >= 7
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -115,6 +148,8 @@ fun AuthScreen(vm: AuthViewModel = hiltViewModel()) {
                     Mode.SIGN_IN -> "Welcome back."
                     Mode.SIGN_UP -> "Private to you, synced across your devices."
                     Mode.RESET -> if (resetSent) "Check your inbox — a reset link is on its way." else "Enter your email and we'll send a reset link."
+                    Mode.OFFLINE_SIGN_UP -> "Create a local profile to use Bloom completely offline."
+                    Mode.OFFLINE_SIGN_IN -> "Welcome back to your local profile."
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -133,6 +168,11 @@ fun AuthScreen(vm: AuthViewModel = hiltViewModel()) {
                         onClick = { mode = Mode.SIGN_IN },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Use email instead") }
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(
+                        onClick = { mode = Mode.OFFLINE_SIGN_IN },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Use offline mode", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Spacer(Modifier.height(18.dp))
                     Text(
                         "Your entries are private to your account. Always.",
@@ -191,6 +231,60 @@ fun AuthScreen(vm: AuthViewModel = hiltViewModel()) {
                     }) {
                         Text(if (mode == Mode.SIGN_IN) "New here? Create an account" else "I already have an account")
                     }
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(onClick = { mode = Mode.WELCOME }) { Text("Back", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+
+                Mode.OFFLINE_SIGN_UP, Mode.OFFLINE_SIGN_IN -> {
+                    if (mode == Mode.OFFLINE_SIGN_UP) {
+                        OutlinedTextField(
+                            value = name, onValueChange = { name = it },
+                            label = { Text("Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    OutlinedTextField(
+                        value = phone, onValueChange = { phone = it },
+                        label = { Text("Phone Number") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = password, onValueChange = { password = it },
+                        label = { Text("Password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        onClick = {
+                            localError = when {
+                                mode == Mode.OFFLINE_SIGN_UP && name.trim().length < 2 -> "Name is required."
+                                !validPhone() -> "Enter a valid phone number."
+                                password.length < 4 -> "Password needs at least 4 characters."
+                                else -> null
+                            }
+                            if (localError == null) {
+                                if (mode == Mode.OFFLINE_SIGN_IN) vm.localSignIn(phone, password)
+                                else vm.localSignUp(name, phone, password)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy,
+                    ) {
+                        Text(if (mode == Mode.OFFLINE_SIGN_IN) "Sign in locally" else "Create local profile")
+                    }
+                    TextButton(onClick = {
+                        mode = if (mode == Mode.OFFLINE_SIGN_IN) Mode.OFFLINE_SIGN_UP else Mode.OFFLINE_SIGN_IN
+                    }) {
+                        Text(if (mode == Mode.OFFLINE_SIGN_IN) "New here? Create local profile" else "I already have a local profile")
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(onClick = { mode = Mode.WELCOME }) { Text("Back", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
 
                 Mode.RESET -> {

@@ -1,6 +1,8 @@
 package mobile.dairy.app.domain
 
 import kotlinx.serialization.Serializable
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
 /**
  * Firestore document models. Every field has a default so the Firestore SDK
@@ -38,8 +40,20 @@ data class PersonRef(
     var feeling: String = "happy",
 )
 
+@Entity(tableName = "local_users")
+data class LocalUser(
+    @PrimaryKey val id: String = "",
+    val name: String = "",
+    val phone: String = "",
+    val passwordHash: String = "",
+    val firebaseUid: String? = null,
+    val createdAt: Long = 0,
+)
+
 @Serializable
+@Entity(tableName = "journal_entries")
 data class JournalEntry(
+    @PrimaryKey
     var id: String = "",
     var date: String = "",
     var createdAt: Long = 0,
@@ -61,9 +75,14 @@ data class JournalEntry(
     var favorite: Boolean = false,
     var important: Boolean = false,
     var customAnswers: Map<String, String> = emptyMap(),
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
+@Entity(tableName = "daily_ratings")
 data class DailyRating(
+    @PrimaryKey
     var date: String = "",
     var overall: Int? = null,
     var happiness: Int? = null,
@@ -76,6 +95,9 @@ data class DailyRating(
     var sleep: Int? = null,
     var financialDiscipline: Int? = null,
     var updatedAt: Long = 0,
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
 data class Milestone(
@@ -91,7 +113,9 @@ data class GoalTask(
     var done: Boolean = false,
 )
 
+@Entity(tableName = "goals")
 data class Goal(
+    @PrimaryKey
     var id: String = "",
     var title: String = "",
     var description: String? = null,
@@ -105,9 +129,14 @@ data class Goal(
     var plannedMinutesPerDay: Int? = null,
     var createdAt: Long = 0,
     var updatedAt: Long = 0,
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
+@Entity(tableName = "goal_updates")
 data class GoalUpdate(
+    @PrimaryKey
     var id: String = "",
     var goalId: String = "",
     var date: String = "",
@@ -121,9 +150,14 @@ data class GoalUpdate(
     var lesson: String? = null,
     var note: String? = null,
     var createdAt: Long = 0,
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
+@Entity(tableName = "expenses")
 data class Expense(
+    @PrimaryKey
     var id: String = "",
     var date: String = "",
     var amount: Double = 0.0,
@@ -131,9 +165,14 @@ data class Expense(
     var necessity: String = "necessary", // necessary | unnecessary
     var note: String? = null,
     var createdAt: Long = 0,
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
+@Entity(tableName = "savings")
 data class Saving(
+    @PrimaryKey
     var id: String = "",
     var date: String = "",
     var amount: Double = 0.0,
@@ -141,6 +180,9 @@ data class Saving(
     var kind: String = "earned",         // earned | avoided
     var note: String? = null,
     var createdAt: Long = 0,
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
 data class AppUsage(
@@ -159,7 +201,9 @@ data class ScreenTimeDay(
     var updatedAt: Long = 0,
 )
 
+@Entity(tableName = "insights")
 data class Insight(
+    @PrimaryKey
     var id: String = "",
     var date: String = "",
     var type: String = "",
@@ -169,9 +213,15 @@ data class Insight(
     var priority: Int = 0,
     var seen: Boolean = false,
     var createdAt: Long = 0,
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
+@Entity(tableName = "app_prefs")
 data class AppPrefs(
+    @PrimaryKey
+    var id: String = "app_prefs", // Single row pattern
     var theme: String = "system",        // system | light | dark
     var accent: String = "violet",       // violet | teal | rose | amber | sky
     var cardGradient: String = "midnight", // midnight | sunset | ocean | aurora | forest | berry | ember | royal
@@ -216,7 +266,10 @@ data class AppPrefs(
         JournalQuestionDef("q_gratitude", "What are you grateful for?", "Small things count.", "text", isMandatory = false, isActive = false),
         JournalQuestionDef("q_good_decision", "One good decision you made?", null, "text", isMandatory = false, isActive = false),
         JournalQuestionDef("q_improve_tomorrow", "What would you improve tomorrow?", "Small and realistic beats grand and forgotten.", "text", isMandatory = false, isActive = false)
-    )
+    ),
+    var isSynced: Boolean = false,
+    var alterId: Int = 1,
+    var userId: String = "",
 )
 
 data class DeviceToken(

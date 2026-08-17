@@ -15,29 +15,42 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+import mobile.dairy.app.services.FirestoreSyncManager
 
 @HiltViewModel
 class RootViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     prefsRepository: PrefsRepository,
-    localPrefs: LocalPrefs,
+    private val localPrefs: LocalPrefs,
     private val reminderScheduler: ReminderScheduler,
+    private val syncManager: FirestoreSyncManager,
+    private val database: mobile.dairy.app.data.AppDatabase,
+    private val sessionManager: mobile.dairy.app.data.SessionManager
 ) : ViewModel() {
 
     val user = authRepository.authState()
         .stateIn(viewModelScope, SharingStarted.Eagerly, authRepository.currentUser)
 
+    val activeLocalUserId = localPrefs.activeLocalUserId
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val prefs: StateFlow<AppPrefs> = user.flatMapLatest { u ->
-        if (u == null) flowOf(AppPrefs()) else prefsRepository.appPrefs()
+    val prefs: StateFlow<AppPrefs> = sessionManager.currentUserIdFlow().flatMapLatest { uid ->
+        prefsRepository.appPrefs()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppPrefs())
 
     val onboarded = localPrefs.onboarded
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val onlineMode = localPrefs.isOnlineMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val locked = MutableStateFlow(false)
@@ -55,15 +68,45 @@ class RootViewModel @Inject constructor(
                 if (prefs.value.lockEnabled) locked.value = true
             }
         })
+        
         viewModelScope.launch {
             // Ensure reminders exist on first launch.
             reminderScheduler.rescheduleAll()
             // Dismiss initial loading after auth & initial state settle
-            kotlinx.coroutines.delay(600)
+            delay(600)
             initialLoading.value = false
+        }
+        
+        viewModelScope.launch {
+            combine(user, onlineMode) { u, isOnline ->
+                Pair(u, isOnline)
+            }.collect { (currentUser, isOnline) ->
+                if (isOnline && currentUser != null) {
+                    val activeLocalId = localPrefs.activeLocalUserId.firstOrNull()
+                    if (activeLocalId != null && activeLocalId != "guest") {
+                        globalLoading.value = true
+                        try {
+                            // Migrate all records from activeLocalId to currentUser.uid
+                            syncManager.migrateLocalUserToCloud(activeLocalId, currentUser.uid, database)
+                            // Clear the activeLocalUserId so we don't do it again
+                            localPrefs.setActiveLocalUserId(null)
+                            syncManager.sync()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        } finally {
+                            globalLoading.value = false
+                        }
+                    }
+                }
+            }
         }
     }
 
     fun unlock() { locked.value = false }
-    fun signOut() = authRepository.signOut()
+    fun signOut() {
+        viewModelScope.launch {
+            localPrefs.setActiveLocalUserId(null)
+            authRepository.signOut()
+        }
+    }
 }

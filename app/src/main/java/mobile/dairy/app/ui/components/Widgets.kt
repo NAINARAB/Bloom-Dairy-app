@@ -29,6 +29,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -288,7 +289,7 @@ fun RatingScale(label: String, icon: ImageVector, value: Int?, enabled: Boolean 
                 Text(label, style = MaterialTheme.typography.bodyMedium, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
             }
             Text(
-                "${value ?: 5}/10",
+                "${value ?: 0}/10",
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else if (value != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -297,13 +298,13 @@ fun RatingScale(label: String, icon: ImageVector, value: Int?, enabled: Boolean 
         
         var width by remember { mutableFloatStateOf(1f) }
         val steps = 10
-        val currentValue = value ?: 5
+        val currentValue = value ?: 0
         
         fun updateFromX(x: Float) {
             if (!enabled) return
             val fraction = (x / width).coerceIn(0f, 1f)
             val n = (fraction * steps).roundToInt().coerceIn(1, steps)
-            if (n != currentValue) onChange(n)
+            onChange(n)
         }
 
         Box(
@@ -544,8 +545,29 @@ fun GlobalFilterDialog(
     val today = remember { Dates.todayKey() }
     
     var quickRange by remember { mutableStateOf(initialQuickRange) }
-    var startDate by remember { mutableStateOf(initialStartDate ?: today) }
+    
+    val defaultStart = remember(initialQuickRange) {
+        when (initialQuickRange) {
+            "week" -> Dates.addDays(today, -7)
+            "month" -> Dates.addDays(today, -30)
+            else -> today
+        }
+    }
+    
+    var startDate by remember { mutableStateOf(initialStartDate ?: defaultStart) }
     var endDate by remember { mutableStateOf(initialEndDate ?: today) }
+
+    LaunchedEffect(quickRange) {
+        if (quickRange != "custom") {
+            endDate = today
+            startDate = when (quickRange) {
+                "today" -> today
+                "week" -> Dates.addDays(today, -7)
+                "month" -> Dates.addDays(today, -30)
+                else -> today
+            }
+        }
+    }
     
     var pickingFor by remember { mutableStateOf<String?>(null) } // "start" | "end" | null
 

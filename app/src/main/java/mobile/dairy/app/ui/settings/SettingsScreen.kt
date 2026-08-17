@@ -58,10 +58,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import mobile.dairy.app.core.Constants
 import mobile.dairy.app.core.NotificationCategory
 import mobile.dairy.app.data.AuthRepository
 import mobile.dairy.app.data.PrefsRepository
+import mobile.dairy.app.services.ExcelExporter
+import mobile.dairy.app.services.ExcelImporter
 import mobile.dairy.app.domain.AppPrefs
 import mobile.dairy.app.services.LocalPrefs
 import mobile.dairy.app.services.ReminderScheduler
@@ -80,12 +84,28 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.google.gson.Gson
+import mobile.dairy.app.data.EntryRepository
+import mobile.dairy.app.data.GoalRepository
+import mobile.dairy.app.data.FinanceRepository
+import kotlinx.coroutines.flow.first
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val prefsRepo: PrefsRepository,
     private val authRepo: AuthRepository,
-    private val localPrefs: LocalPrefs,
+    val localPrefs: LocalPrefs,
     private val reminderScheduler: ReminderScheduler,
+    private val entryRepo: EntryRepository,
+    private val goalRepo: GoalRepository,
+    private val financeRepo: FinanceRepository,
+    private val excelExporter: ExcelExporter,
+    private val excelImporter: ExcelImporter,
+    private val syncManager: mobile.dairy.app.services.FirestoreSyncManager,
+    private val sessionManager: mobile.dairy.app.data.SessionManager,
 ) : ViewModel() {
 
     val prefs = prefsRepo.appPrefs()
@@ -98,6 +118,22 @@ class SettingsViewModel @Inject constructor(
 
     val email: String? get() = authRepo.currentUser?.email
     val name: String? get() = authRepo.currentUser?.displayName
+    val isOnlineMode = localPrefs.isOnlineMode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun syncData() {
+        viewModelScope.launch {
+            busy.value = true
+            message.value = "Syncing..."
+            try {
+                syncManager.sync()
+                message.value = "Sync complete!"
+            } catch (e: Exception) {
+                message.value = "Sync failed: ${e.message}"
+            } finally {
+                busy.value = false
+            }
+        }
+    }
 
     fun save(patch: Map<String, Any?>) {
         viewModelScope.launch { runCatching { prefsRepo.save(patch) } }
@@ -116,13 +152,41 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun exportData(onUrl: (String) -> Unit) {
+    fun exportData(context: android.content.Context, onUrl: (String) -> Unit) {
         viewModelScope.launch {
             busy.value = true
-            runCatching { authRepo.requestDataExport() }
+            runCatching {
+                val userId = sessionManager.currentUserId()
+                val file = File(context.cacheDir, "bloom_export.xlsx")
+                FileOutputStream(file).use { out ->
+                    excelExporter.exportDataToExcel(userId, out)
+                }
+                file.absolutePath
+            }
                 .onSuccess(onUrl)
                 .onFailure { message.value = "Export failed: ${it.message}" }
             busy.value = false
+        }
+    }
+
+    fun importData(context: android.content.Context, uri: android.net.Uri) {
+        viewModelScope.launch {
+            busy.value = true
+            try {
+                val userId = sessionManager.currentUserId()
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val result = excelImporter.importDataFromExcel(userId, stream)
+                    if (result is ExcelImporter.ImportResult.Success) {
+                        message.value = "Data imported successfully!"
+                    } else if (result is ExcelImporter.ImportResult.Error) {
+                        message.value = "Import failed: ${result.message}"
+                    }
+                }
+            } catch (e: Exception) {
+                message.value = "Import error: ${e.message}"
+            } finally {
+                busy.value = false
+            }
         }
     }
 
@@ -135,7 +199,19 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun signOut() = authRepo.signOut()
+    fun signOut() {
+        viewModelScope.launch {
+            try {
+                busy.value = true
+                localPrefs.setActiveLocalUserId(null)
+                authRepo.signOut()
+            } catch (e: Exception) {
+                message.value = "Sign out failed: ${e.message}"
+            } finally {
+                busy.value = false
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -144,7 +220,15 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
     val p by vm.prefs.collectAsState()
     val r by vm.reminders.collectAsState()
     val busy by vm.busy.collectAsState()
+    val message by vm.message.collectAsState()
+    val onlineMode by vm.isOnlineMode.collectAsState()
     val context = LocalContext.current
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { vm.importData(context, it) }
+    }
 
     Scaffold(
         topBar = {
@@ -176,7 +260,18 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
                 Spacer(Modifier.width(16.dp))
                 Column {
                     Text(vm.name ?: "Bloom user", style = MaterialTheme.typography.titleMedium)
-                    Text(vm.email ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(vm.email ?: "Local Account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
+                    androidx.compose.material3.SuggestionChip(
+                        onClick = {},
+                        label = { Text(if (onlineMode) "Online Mode" else "Offline Mode", style = MaterialTheme.typography.labelSmall) },
+                        colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = if (onlineMode) mobile.dairy.app.ui.theme.BloomColors.success().copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant,
+                            labelColor = if (onlineMode) mobile.dairy.app.ui.theme.BloomColors.success() else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = null,
+                        modifier = Modifier.height(24.dp)
+                    )
                 }
             }
 
@@ -217,17 +312,49 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
                 
                 SettingSwitch(
                     "Biometric lock", "Face or fingerprint unlock required to open Bloom",
-                    p.lockEnabled, { on -> if (canUseBiometrics(context) || !on) vm.save(mapOf("lockEnabled" to on)) }
+                    p.lockEnabled, { on -> vm.save(mapOf("lockEnabled" to on)) }
                 )
 
                 Spacer(Modifier.height(16.dp))
+                if (message != null) {
+                    Text(text = message!!, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
+                }
+                if (onlineMode) {
+                    OutlinedButton(
+                        onClick = { vm.syncData() },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (busy) "Processing..." else "Sync with Cloud")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            // By setting onlineMode = true, the root UI will intercept and show AuthScreen
+                            // because user is null.
+                            vm.viewModelScope.launch {
+                                vm.localPrefs.setOnlineMode(true)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Switch to Online Mode")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 OutlinedButton(
                     onClick = {
-                        vm.exportData { url ->
+                        vm.exportData(context) { url ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "My Bloom data export: $url")
+                                type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                putExtra(Intent.EXTRA_STREAM, androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", File(url)))
+                                putExtra(Intent.EXTRA_TEXT, "My Bloom data export is attached.")
                             }
+                            // Add read permission for the receiving app
+                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             context.startActivity(Intent.createChooser(intent, "Export Bloom data"))
                         }
                     },
@@ -235,9 +362,19 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = hiltViewModel()) 
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(if (busy) "Preparing export..." else "Export my data (JSON)")
+                    Text(if (busy) "Processing..." else "Export my data (Excel)")
                 }
                 
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { filePickerLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (busy) "Processing..." else "Import data (Excel)")
+                }
+
                 Spacer(Modifier.height(12.dp))
                 TextButton(onClick = { vm.signOut() }, modifier = Modifier.fillMaxWidth()) {
                     Text("Sign out", color = MaterialTheme.colorScheme.error)

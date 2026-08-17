@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -127,6 +128,7 @@ data class DashboardState(
     val effort: Int? = null,
     val energy: Int? = null,
     val goalMinutesToday: Int = 0,
+    val ratings: List<mobile.dairy.app.domain.DailyRating> = emptyList(),
 )
 
 @HiltViewModel
@@ -212,6 +214,7 @@ class DashboardViewModel @Inject constructor(
             effort = rating?.goalEffort,
             energy = rating?.energy,
             goalMinutesToday = gMins,
+            ratings = ratings,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardState())
 
@@ -425,7 +428,12 @@ fun DashboardContent(
             if (s.insights.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     SectionTitle("✨ Insights")
-                    Text("See all", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    // Text(
+                    //     "See all", 
+                    //     style = MaterialTheme.typography.labelMedium, 
+                    //     color = MaterialTheme.colorScheme.primary,
+                    //     modifier = Modifier.clickable { nav.navigate(Routes.INSIGHTS) }
+                    // )
                 }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(s.insights) { insight ->
@@ -445,7 +453,12 @@ fun DashboardContent(
             // Main Goal Section
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle("Goals")
-                Text("View all", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                // Text(
+                //     "View all", 
+                //     style = MaterialTheme.typography.labelMedium, 
+                //     color = MaterialTheme.colorScheme.primary,
+                //     modifier = Modifier.clickable { nav.navigate(Routes.GOALS) }
+                // )
             }
             val mainGoal = s.goals.firstOrNull()
             if (mainGoal != null) {
@@ -599,7 +612,7 @@ fun DashboardContent(
             // Weekly Mood Trend Section
             SectionTitle("Weekly Mood Trend")
             BloomCard {
-                WeekMoodLineChart(s.entries, s.today)
+                WeekMoodLineChart(s.ratings, s.today)
             }
             Spacer(Modifier.height(32.dp))
         }
@@ -676,18 +689,18 @@ private fun StreakBadge(days: Int, label: String) {
 }
 
 @Composable
-fun WeekMoodLineChart(entries: List<JournalEntry>, todayKey: String) {
+fun WeekMoodLineChart(ratings: List<mobile.dairy.app.domain.DailyRating>, todayKey: String) {
     val weekKeys = (6 downTo 0).map { Dates.addDays(todayKey, -it.toLong()) }
     val data = weekKeys.map { date ->
-        val e = entries.firstOrNull { it.date == date }
-        if (e != null && e.moods.isNotEmpty()) Mood.valenceOf(e.moods) else 0.0
+        val r = ratings.firstOrNull { it.date == date }
+        r?.overall?.toDouble() ?: 0.0
     }
     
     Column(Modifier.fillMaxWidth()) {
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(140.dp)) {
-            val maxValence = 1.0
-            val minValence = -1.0
-            val range = 2.0
+            val maxValence = 10.0
+            val minValence = 0.0
+            val range = 10.0
             val w = size.width
             val h = size.height
             val stepX = if (data.size > 1) w / (data.size - 1) else w
@@ -721,6 +734,25 @@ fun WeekMoodLineChart(entries: List<JournalEntry>, todayKey: String) {
                     colors = listOf(Color(0xFF8B5CF6).copy(alpha = 0.4f), Color.Transparent)
                 )
             )
+            
+            // Draw horizontal grid lines for 2, 4, 6, 8, 10
+            val textPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.GRAY
+                textSize = 28f
+                isAntiAlias = true
+            }
+            listOf(2.0, 4.0, 6.0, 8.0, 10.0).forEach { value ->
+                val normalized = (value - minValence) / range
+                val y = h - (normalized * h).toFloat()
+                drawLine(
+                    color = Color.Gray.copy(alpha = 0.2f),
+                    start = androidx.compose.ui.geometry.Offset(0f, y),
+                    end = androidx.compose.ui.geometry.Offset(w, y),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawContext.canvas.nativeCanvas.drawText(value.toInt().toString(), 0f, y - 8f, textPaint)
+            }
+
             drawPath(
                 path = path,
                 color = Color(0xFF8B5CF6),

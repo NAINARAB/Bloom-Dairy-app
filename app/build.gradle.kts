@@ -80,10 +80,20 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.gson)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    // Room Database
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // Apache POI for Excel Export/Import
+    implementation(libs.apache.poi)
+    implementation(libs.apache.poi.ooxml)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)

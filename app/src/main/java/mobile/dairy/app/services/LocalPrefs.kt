@@ -59,16 +59,16 @@ data class CheckinDraft(
     val goodDecision: String = "",
     val improvement: String = "",
     val note: String = "",
-    val overall: Int? = 5,
-    val happiness: Int? = 5,
-    val energy: Int? = 5,
-    val productivity: Int? = 5,
-    val focus: Int? = 5,
-    val discipline: Int? = 5,
-    val goalEffort: Int? = 5,
-    val stress: Int? = 5,
-    val sleep: Int? = 5,
-    val financialDiscipline: Int? = 5,
+    val overall: Int? = null,
+    val happiness: Int? = null,
+    val energy: Int? = null,
+    val productivity: Int? = null,
+    val focus: Int? = null,
+    val discipline: Int? = null,
+    val goalEffort: Int? = null,
+    val stress: Int? = null,
+    val sleep: Int? = null,
+    val financialDiscipline: Int? = null,
     val spent: String = "",
     val necessary: Boolean = true,
     val earned: String = "",
@@ -85,6 +85,7 @@ class LocalPrefs @Inject constructor(@ApplicationContext private val context: Co
     private val reminderKey = stringPreferencesKey("reminder_settings")
     private val draftKey = stringPreferencesKey("checkin_draft")
     private val onboardedKey = booleanPreferencesKey("onboarded")
+    private val onlineModeKey = booleanPreferencesKey("online_mode")
 
     val reminderSettings: Flow<ReminderSettings> = context.dataStore.data.map { p ->
         p[reminderKey]?.let { runCatching { json.decodeFromString<ReminderSettings>(it) }.getOrNull() }
@@ -113,5 +114,22 @@ class LocalPrefs @Inject constructor(@ApplicationContext private val context: Co
 
     suspend fun setOnboarded() {
         context.dataStore.edit { it[onboardedKey] = true }
+    }
+
+    val isOnlineMode: Flow<Boolean> = context.dataStore.data.map { it[onlineModeKey] ?: true } // Default true for legacy users
+
+    suspend fun setOnlineMode(online: Boolean) {
+        context.dataStore.edit { it[onlineModeKey] = online }
+    }
+
+    private val activeLocalUserIdKey = stringPreferencesKey("active_local_user_id")
+
+    val activeLocalUserId: Flow<String?> = context.dataStore.data.map { it[activeLocalUserIdKey] }
+
+    suspend fun setActiveLocalUserId(id: String?) {
+        context.dataStore.edit {
+            if (id == null) it.remove(activeLocalUserIdKey)
+            else it[activeLocalUserIdKey] = id
+        }
     }
 }

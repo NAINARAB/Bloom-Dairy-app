@@ -84,6 +84,8 @@ object Routes {
     const val INSIGHTS_JOURNAL = "insights/journal"
     const val INSIGHTS_GOALS = "insights/goals"
     const val INSIGHTS_DIGITAL_HABITS = "insights/digital-habits"
+    const val INSIGHTS_FINANCE = "insights/finance"
+    const val INSIGHTS_HOLISTIC = "insights/holistic"
     const val SCREEN_TIME = "screen-time"
     const val CHECK_IN = "check-in"
     const val NEW_GOAL = "goal/new"
@@ -102,8 +104,10 @@ object Routes {
 @Composable
 fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
     val user by vm.user.collectAsState()
+    val activeLocalUserId by vm.activeLocalUserId.collectAsState()
     val prefs by vm.prefs.collectAsState()
     val onboarded by vm.onboarded.collectAsState()
+    val onlineMode by vm.onlineMode.collectAsState()
     val locked by vm.locked.collectAsState()
     val globalLoading by vm.globalLoading.collectAsState()
     val initialLoading by vm.initialLoading.collectAsState()
@@ -120,9 +124,9 @@ fun BloomRoot(vm: RootViewModel = hiltViewModel()) {
         ) {
             Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 when {
-                    user == null -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { AuthScreen() }
-                    locked && prefs.lockEnabled -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { LockScreen(onUnlocked = vm::unlock) }
                     !onboarded -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { OnboardingScreen() }
+                    locked && prefs.lockEnabled -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { LockScreen(onUnlocked = vm::unlock) }
+                    (onlineMode && user == null) || (!onlineMode && activeLocalUserId == null) -> Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { AuthScreen() }
                     else -> {
                         Box(androidx.compose.ui.Modifier.safeDrawingPadding()) { 
                             BloomNavHost() 
@@ -167,6 +171,8 @@ fun BloomNavHost() {
         composable(Routes.INSIGHTS_JOURNAL) { mobile.dairy.app.ui.insights.reports.JournalReportsScreen(nav) }
         composable(Routes.INSIGHTS_GOALS) { mobile.dairy.app.ui.insights.reports.GoalReportsScreen(nav) }
         composable(Routes.INSIGHTS_DIGITAL_HABITS) { mobile.dairy.app.ui.insights.reports.DigitalHabitsScreen(nav) }
+        composable(Routes.INSIGHTS_FINANCE) { mobile.dairy.app.ui.insights.reports.FinanceReportsScreen(nav) }
+        composable(Routes.INSIGHTS_HOLISTIC) { mobile.dairy.app.ui.insights.reports.HolisticInsightsScreen(nav) }
     }
 }
 

@@ -52,10 +52,11 @@ class OnboardingViewModel @Inject constructor(
     private val reminderScheduler: ReminderScheduler,
 ) : ViewModel() {
 
-    fun finish() {
+    fun finish(onlineMode: Boolean) {
         viewModelScope.launch {
             runCatching {
                 reminderScheduler.rescheduleAll()
+                localPrefs.setOnlineMode(onlineMode)
                 localPrefs.setOnboarded()
             }
         }
@@ -81,9 +82,13 @@ fun OnboardingScreen(vm: OnboardingViewModel = hiltViewModel()) {
     val scope = rememberCoroutineScope()
     val isLast = pager.currentPage == SLIDES.size - 1
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val permissionLauncherOffline = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ -> vm.finish() } // proceed either way — reminders simply stay silent if denied
+    ) { _ -> vm.finish(false) }
+
+    val permissionLauncherOnline = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> vm.finish(true) }
 
     Column(Modifier.fillMaxSize()) {
         HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
@@ -139,22 +144,35 @@ fun OnboardingScreen(vm: OnboardingViewModel = hiltViewModel()) {
         }
 
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
-            Button(
-                onClick = {
-                    if (!isLast) {
-                        scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        vm.finish()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (isLast) "Enable gentle reminders & start" else "Next") }
-            if (isLast) {
-                TextButton(onClick = vm::finish, modifier = Modifier.fillMaxWidth()) {
-                    Text("Start without notifications")
-                }
+            if (!isLast) {
+                Button(
+                    onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Next") }
+            } else {
+                Button(
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncherOffline.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            vm.finish(false)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Start Offline Mode (No Account Needed)") }
+                
+                Spacer(Modifier.height(8.dp))
+                
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncherOnline.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            vm.finish(true)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Start Online Mode (Sync to Cloud)") }
             }
             Spacer(Modifier.height(10.dp))
         }
